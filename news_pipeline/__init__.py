@@ -1,0 +1,1 @@
+"""Canadian news ingestion pipeline."""

@@ -1,13 +1,14 @@
 # Backend (.NET Web API on AWS Lambda)
 
-The `backend/` folder at the repo root is the future home of the ASP.NET Core Web API. **No application code yet** — this doc defines how it should be built, run locally in Docker, and deployed.
+The `backend/` folder is a working .NET 10 Web API (`CNews.Api`). Local Kestrel on `:5080` is the day-to-day path; Lambda container deploy is still the production sketch. Living inventory: [SHIPPED.md](./SHIPPED.md). HTTP contract: [api.md](./api.md).
 
 ## Role
 
 Serve the React Native app:
 
-- Masonry Home feed (`/v1/home/feed`) with image + title cards
-- Story detail + coverage cluster payload for the full-screen outlet pager
+- Masonry Home feed (`/v1/home/feed`, CrackNews uses `mode=listen`) with image + title cards
+- First-party display ads (`/v1/ads/display`) — not mixed into the news feed
+- Story detail + coverage cluster payload (coverage **swipe UI deferred**)
 - Storylines (timelines)
 - Google Sign-In → PostgreSQL user + topic preferences
 - Short-lived audio URLs for Opus objects in S3

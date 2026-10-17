@@ -1,6 +1,6 @@
 # CNews Mobile
 
-React Native (**Expo SDK 57**) client for [CNews](../docs/real-time-ingestion/mobile.md). Immersive RedNote-style home wall, full-screen reader with multi-outlet coverage swipe, center **Play** for visible cards, **Storylines**, and **Settings** (Google sign-in stub, topics, listening prefs).
+React Native (**Expo SDK 57**) client for [CNews](../docs/real-time-ingestion/mobile.md). Immersive RedNote-style home wall, in-tab reader, center **Play** for visible **stories**, **Storylines**, first-party display ads, and **Settings** (Google sign-in stub + topic toggles). Coverage swipe is deferred.
 
 Talks to the .NET API in `backend/` via `EXPO_PUBLIC_API_BASE_URL`. When the API is unreachable, seeded mock stories keep the UI usable offline.
 
@@ -41,12 +41,12 @@ Start the backend first ([local development](../docs/real-time-ingestion/local-d
 
 | Tab | Role |
 | --- | --- |
-| **Home** | Staggered two-column masonry, no app-name header; tap → full-screen reader |
-| **▶ Play** (center) | Speaks ~4 **visible** wall cards (top-left → top-right → …) |
-| **Storylines** | Ongoing / Closed lists; detail timeline newest-first |
-| **Settings** | Google login stub, topic toggles, listening preference |
+| **Home** | Staggered two-column masonry, no app-name header; tap story → in-tab reader; ads open the advertiser |
+| **▶ Play** (center) | Speaks visible **story** cards (left→right then top→bottom); ads skipped |
+| **Storylines** | Ongoing / Closed lists (ads may appear); detail timeline newest-first |
+| **Settings** | Topic toggles only (Home is always voice-ready) |
 
-Coverage is **not** a tab — multi-outlet stories use a horizontal pager inside the full-screen reader (`CBC · 1/3`).
+Coverage is **not** a tab — clustered stories appear as separate Home cards. The coverage API exists; the swipe pager is deferred.
 
 ## Project layout
 
@@ -70,16 +70,16 @@ mobile/
 - **Zustand** — player queue, visible cards, auth/settings
 - **TanStack Query** — feed / story / storylines fetching
 - **expo-sqlite** — cached masonry cards
-- **Custom light UI** — production polish (HeroUI Native is listed in the product spec but requires Uniwind; this build uses a tailored theme instead)
+- **Custom theme** — Atlantic blue + graphite; system light/dark (not HeroUI)
 - **expo-audio** — Opus/HTTP audio playback
 
 ## API endpoints used
 
 See [api.md](../docs/real-time-ingestion/api.md):
 
-- `GET /v1/home/feed`
+- `GET /v1/home/feed?mode=listen`
+- `GET /v1/ads/display?slot=home_wall|storylines_list`
 - `GET /v1/stories/:id`, `GET /v1/stories/:id/audio-url`
-- `GET /v1/coverage/:clusterId`
 - `GET /v1/storylines`, `GET /v1/storylines/:id`
 - `GET /v1/meta/topics`
 - `POST /v1/auth/google`, `PUT /v1/me/topics`

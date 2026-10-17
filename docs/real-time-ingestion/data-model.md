@@ -7,7 +7,7 @@ Contracts for published content (MongoDB), users (PostgreSQL), media (S3), and t
 | Id | Meaning |
 | --- | --- |
 | `storyId` | Stable id for one outlet report (maps from today’s article row id / UUID) |
-| `clusterId` | Shared event across outlets → Home full-screen **coverage swipe** |
+| `clusterId` | Shared event across outlets (coverage API exists; Home swipe UI deferred) |
 | `threadId` | Unfolding situation → **Storyline** in the app |
 | `userId` | App user (PostgreSQL) |
 | `audioKey` | S3 object key for Opus |
@@ -16,7 +16,7 @@ Contracts for published content (MongoDB), users (PostgreSQL), media (S3), and t
 
 | Store | Owns |
 | --- | --- |
-| MongoDB | Stories, coverage clusters, storylines |
+| MongoDB | Stories, coverage clusters, storylines, display ads |
 | PostgreSQL | Users, Google subject, topic preferences |
 | S3 | Opus audio bytes |
 | Device SQLite | Cached feed cards, local prefs mirror, read/play cursors |
@@ -133,6 +133,32 @@ Only clusters with **≥ 2** outlets and framing text for each are returned for 
 | `open` | **Ongoing** |
 | `closed` | **Closed** |
 
+### `display_ads`
+
+First-party in-feed cards. Not mixed into `stories`. Served by `GET /v1/ads/display`. Seed: `scripts/seed_demo_ads.py`.
+
+```json
+{
+  "adId": "display_demo_1",
+  "advertiser": "VIA Rail",
+  "title": "Weekend trains from $49 — see Canada by rail",
+  "clickUrl": "https://www.viarail.ca/",
+  "imageKey": "local/ads/display/ad_demo_1.jpg",
+  "imageAspect": 0.74,
+  "active": true,
+  "slot": "home_wall",
+  "slots": ["home_wall"]
+}
+```
+
+| Field | Notes |
+| --- | --- |
+| `slot` / `slots` | `home_wall` and/or `storylines_list` |
+| `imageKey` | Local media or S3 key; API returns a signed/local `imageUrl` |
+| `active` | Inactive ads are omitted |
+
+Play queues ignore these. No audio ads in this collection.
+
 ### `publish_deadletters` (ops)
 
 Failed Mongo/S3 attempts for operators; not exposed to mobile.
@@ -158,7 +184,7 @@ Failed Mongo/S3 attempts for operators; not exposed to mobile.
 | --- | --- | --- |
 | `user_id` | text PK/FK | |
 | `topics` | text[] or jsonb | e.g. `{Canada,Local}` |
-| `prefer_listen_ready` | boolean | Play queue preference |
+| `prefer_listen_ready` | boolean | Unused by the app (Home is always `mode=listen`) |
 | `updated_at` | timestamptz | |
 
 ## Device SQLite (mobile cache)

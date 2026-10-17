@@ -67,9 +67,10 @@ Text-first publish is allowed when audio is disabled or still pending; the API m
 
 - Wall: staggered two-column masonry — **not** a rigid grid. **No** top app-name bar.
 - Image card: full-bleed image + title; tap → **in-tab** full-screen reader (above tab bar).
+- Display ads may mix in as labeled masonry cards (0–1 per page); tap opens the advertiser. Ads are not in Play.
 - Reader: image, title, summary, in-app **Original** WebView (Play pauses / resumes).
-- Scroll down loads more (cursor); pull at top → **fresh shuffled** first page.
-- Topic-filtered; SQLite/cache + remote sync.
+- Scroll down loads more (cursor); pull at top → **fresh shuffled** first page (ads re-roll).
+- Always voice-ready feed (`mode=listen`). Topic-filtered; not geo-located. SQLite/cache + remote sync.
 
 **Done when.** Cold open paints the wall immersively; tap/back round-trips to full-screen cleanly.
 
@@ -81,8 +82,9 @@ Text-first publish is allowed when audio is disabled or still pending; the API m
 
 **Details.**
 
-- Home: visible masonry cards, zigzag order; skip non-ready audio.
-- Storylines: list briefs or current thread updates.
+- Home: **stories only**, left→right then top→bottom among visible masonry cards; skip ads and non-ready audio.
+- Pull-to-refresh while playing keeps the current brief and rebinds the remaining queue to the new wall order.
+- Storylines: list briefs or current thread updates (ads in the list are skipped).
 - Soft highlight / Listening on the speaking card or timeline row.
 - No auto-play on card open.
 
@@ -94,7 +96,8 @@ Text-first publish is allowed when audio is disabled or still pending; the API m
 
 **Details.**
 
-- Multi-select topic toggles matching the ingest catalog.
+- Multi-select topic toggles matching the ingest catalog. **No** listening-mode radios.
+- Home is always `mode=listen`; Play still skips cards without audio.
 - Defaults: `Top`, `Canada`, `Local` on; others off (tunable).
 - Mirrored in on-device SQLite; synced to **PostgreSQL** when signed in with Google.
 - Changing topics triggers a Home feed sync.
@@ -124,6 +127,7 @@ Text-first publish is allowed when audio is disabled or still pending; the API m
 **Details.**
 
 - Tab: **Storylines** — Ongoing / Closed / All; cursor pagination + shuffle refresh.
+- Display ads may appear as full-width storyline-style cards (labeled Ad); not in Play or the timeline.
 - Detail: hero + outlet timeline (clock stamp, connected icon spine, summary cards, Original).
 - Play scoped to list or open thread; Original pause/resume.
 - Pipeline decisions remain `IGNORE` / `OPEN` / `UPDATE`.
@@ -188,6 +192,8 @@ Guidance: [mobile.md](./mobile.md) · [SHIPPED.md](./SHIPPED.md).
 
 - Push notifications and breaking-news alerts.
 - Personalized ranking / outlet subscribe — **planned**, see [upgrade-plan.md](./upgrade-plan.md).
+- GPS / city Play (stories may have a `place` label; the feed is not filtered by device location).
+- Audio mid-roll ads / AdMob (display cards only).
 - Multi-language briefs.
 - Apple / email password login (Google first).
 - Moderating or rewriting outlet framing beyond existing comparison notes.

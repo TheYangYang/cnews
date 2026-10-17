@@ -97,9 +97,10 @@ flowchart TB
 
 ### Mobile (React Native + Expo Go)
 
-- Immersive Home wall (masonry) → full-screen reader; Coverage = horizontal outlet swipe (no Coverage tab).
-- Tabs: Home · Play · Storylines · Settings.
-- Stack: latest React Native / Expo, **HeroUI Native**, **Zustand**, on-device **SQLite** + remote API.
+- Immersive Home wall (masonry) → in-tab full-screen reader. Coverage swipe is deferred (separate Home cards).
+- Display ads as labeled cards on Home and Storylines; not in Play.
+- Tabs: Home · Storylines · Play · Settings · Login.
+- Stack: Expo 57, custom Atlantic-blue theme, **Zustand**, on-device **SQLite** + remote API.
 - Talk only to the backend API. Never talk to Ollama, Redis, or the GPU host.
 
 ## End-to-end story lifecycle
@@ -148,11 +149,11 @@ Exact publish ordering rules are in [pipeline.md](./pipeline.md).
 | LLM | Ollama + `llama3.1:8b` | Required for quality briefs; extractive fallback only for resilience |
 | Speech | Kokoro-82M → Opus | Optional for text-only publish; preferred for mobile listen mode |
 | Working store | SQLite today | May remain for pipeline ops; not the mobile source of truth |
-| Publish store | MongoDB | Stories, coverage (compares), storylines the API serves |
+| Publish store | MongoDB | Stories, coverage (compares), storylines, display ads |
 | User store | PostgreSQL | Google identity, topic preferences |
 | Media store | AWS S3 | Opus blobs; app never gets a permanent public bucket listing |
 | API | ASP.NET Core (.NET 10) on Lambda (container) | Stateless; scales with traffic |
-| Client | React Native / Expo / HeroUI Native / Zustand | Immersive wall + full-screen + Play |
+| Client | React Native / Expo / custom theme / Zustand | Immersive wall + full-screen + Play |
 | Client cache | SQLite on device | Feed cards + prefs mirror; audio stays remote |
 
 ## Why this split
@@ -168,7 +169,7 @@ Exact publish ordering rules are in [pipeline.md](./pipeline.md).
 | Brief storage | Pipeline SQLite `articles.summary` | MongoDB `stories` (+ device SQLite cache) |
 | Audio | Optional local WAV | Opus in S3; MongoDB holds `audioKey` |
 | TTS timing | Stream consumer when Kokoro installed | After brief + GPU rest gate |
-| Client | Local HTML reader | Expo wall → full-screen (+ coverage swipe) + Storylines |
+| Client | Local HTML reader | Expo wall → in-tab reader + Play + Storylines (coverage swipe deferred) |
 | Users | — | Google Sign-In → PostgreSQL |
 | API | `/api/snapshot` on local process | Versioned REST under `/v1` |
 

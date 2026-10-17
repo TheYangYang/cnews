@@ -10,8 +10,8 @@ How to run the full loop on a laptop: ingest + Ollama + (optional) Kokoro + Dock
 | Docker Desktop | MongoDB, PostgreSQL, MinIO, Redis, API container |
 | Ollama | `llama3.1:8b` briefs |
 | Kokoro-82M | Spoken Opus (optional but desired) |
-| .NET 10 SDK | Backend (when code exists) |
-| Node 20+ / Expo Go | Mobile (RN latest, HeroUI Native, Zustand) |
+| .NET 10 SDK | Backend (`CNews.Api` on Kestrel) |
+| Node 20+ / Expo Go | Mobile (Expo 57, custom theme, Zustand) |
 | Redis | Optional; fakeredis works for solo ingest |
 
 ## 1. Ollama 8B (required for good briefs)

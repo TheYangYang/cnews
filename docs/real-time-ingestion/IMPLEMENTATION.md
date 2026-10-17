@@ -26,8 +26,8 @@ Canonical inventory: [SHIPPED.md](./SHIPPED.md) · Runbook: [DEV.md](./DEV.md).
 ## Verified locally (checkpoint)
 
 - `docker compose up -d mongo postgres redis`
-- `python3 scripts/seed_demo_mongo.py`
-- `dotnet test` / API on `:5080`: health, feed, storylines (+ cursor), coverage, audio-url
+- `python3 scripts/seed_demo_mongo.py` and `python3 scripts/seed_demo_ads.py`
+- `dotnet test` / API on `:5080`: health, feed (`mode=listen`), ads/display, storylines (+ cursor), coverage, audio-url
 - Mobile: Expo SDK 57, Metro LAN; Play + Storylines timeline against seeded Mongo
 
 ## Layering
@@ -36,7 +36,13 @@ Canonical inventory: [SHIPPED.md](./SHIPPED.md) · Runbook: [DEV.md](./DEV.md).
 **Backend:** Api / Application / Domain / Infrastructure.  
 **Mobile:** Expo Router · `features/` · `shared/` · `data/` (api, db, stores).
 
-## Recent product hardening (2026-10-10)
+## Recent product hardening (2026-10-17)
+
+- Display ads: story-like cards on Home + Storylines list; tap opens advertiser; not in Play.
+- Voice-first: Home always `mode=listen`; Settings is topics only (no listening radios / About).
+- Pull-to-refresh while Play: keep current brief, rebind remaining queue.
+
+## Earlier hardening (2026-10-10)
 
 - Brand **CrackNews**; system dark mode; typographic C icon / black splash.
 - In-tab readers above the tab bar; Original in WebView.

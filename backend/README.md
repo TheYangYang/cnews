@@ -20,6 +20,7 @@ backend/
 # from repo root
 docker compose up -d mongo postgres redis
 python3 scripts/seed_demo_mongo.py
+python3 scripts/seed_demo_ads.py
 
 export PATH="$HOME/.dotnet:$PATH"
 cd backend
@@ -29,7 +30,8 @@ dotnet run --project CNews.Api --urls http://0.0.0.0:5080
 | Check | Command |
 | --- | --- |
 | Health | `curl http://127.0.0.1:5080/v1/health` |
-| Feed | `curl 'http://127.0.0.1:5080/v1/home/feed?topics=Canada,Local,Business,Health'` |
+| Feed | `curl 'http://127.0.0.1:5080/v1/home/feed?mode=listen&topics=Canada,Local,Business,Health'` |
+| Ads | `curl 'http://127.0.0.1:5080/v1/ads/display?slot=home_wall'` |
 | Dev login | `curl -X POST http://127.0.0.1:5080/v1/auth/google -H 'Content-Type: application/json' -d '{"idToken":"dev:you@example.com"}'` |
 
 ## Config

@@ -153,6 +153,7 @@ Primary endpoint for the RedNote-style wall.
 | `limit` | `20` | max 40 |
 | `cursor` | — | Opaque; omit for newest page |
 | `newerThan` | — | ISO time; used when user pulls at top for **new** items |
+| `mode` | `any` | `listen` = voice-ready stories only. CrackNews always sends `listen`. |
 
 **200**
 
@@ -164,7 +165,7 @@ Primary endpoint for the RedNote-style wall.
 }
 ```
 
-Client upserts `items` into SQLite. Pull-at-top calls with `newerThan=<local max publishedAt>`.
+Client upserts `items` into SQLite. The Expo app always requests `mode=listen`. Pull-to-refresh fetches a fresh first page and shuffles locally (not a `newerThan` merge).
 
 ### `GET /v1/home/random` (optional helper)
 
@@ -186,7 +187,7 @@ Kept for tooling / demos; Home UI does **not** depend on a single hero card.
 }
 ```
 
-`compareClusterId` / `threadId` drive full-screen coverage swipe and Storylines links in the app.
+`compareClusterId` / `threadId` are available for Storylines links. Coverage swipe UI is **deferred** — Home still shows separate cards per outlet.
 
 ### `GET /v1/stories/{storyId}/audio-url`
 
@@ -202,7 +203,7 @@ There is **no** mobile Coverage tab. The client loads cluster detail when openin
 
 **200** — event title + `outlets[]` with `framing`, `summary`, `audioStatus`, `audioUrl`, `outlet`, `storyId`, `imageUrl`.
 
-Client builds a horizontal full-screen pager from `outlets[]`, starting at the tapped `storyId`.
+API is ready for a horizontal full-screen pager; that UI is **not** in the app. Seeded clusters still appear as separate Home cards.
 
 ### `GET /v1/coverage` (optional)
 
@@ -254,4 +255,4 @@ Aliases: `/v1/threads` deprecated synonyms OK during migration.
 
 ## Pagination
 
-Opaque cursors. Home pull-to-refresh uses `newerThan` rather than resetting cursors blindly.
+Opaque cursors. Home and Storylines pull-to-refresh reset to a shuffled first page (client-side). `newerThan` remains available for a future “new items only” merge.

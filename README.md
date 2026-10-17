@@ -21,6 +21,7 @@ Full runbook: [docs/real-time-ingestion/DEV.md](docs/real-time-ingestion/DEV.md)
 cp .env.example .env
 docker compose up -d mongo postgres redis
 python3 scripts/seed_demo_mongo.py   # sample content without Ollama
+python3 scripts/seed_demo_ads.py     # Home + Storylines display ads
 ```
 
 ### 2. API

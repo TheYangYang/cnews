@@ -15,7 +15,7 @@ Related: [features.md](./features.md) · [data-model.md](./data-model.md) · [ap
 | --- | --- |
 | Topic filters (`Top`, `Canada`, …) | Too coarse — users care about **CBC vs National Post**, local desks, etc. |
 | Chronological / shuffled feed | No learning from plays, dwell, or follows |
-| Guest + optional Google | Prefs exist but are thin (`topics` + listening mode) |
+| Guest + optional Google | Prefs exist but are thin (`topics` only; Home is always voice-ready) |
 | Cluster/coverage API unused in UI | Personalization can still ship without compare swipe |
 
 ---
@@ -62,7 +62,7 @@ Body merges with existing `PUT /v1/me/topics` (or deprecate topics-only endpoint
 
 **Mobile**
 
-- Settings sections: Topics · **Outlets** · Places · Listening.
+- Settings sections: Topics · **Outlets** · Places. (Listening mode is not a pref — Home stays `mode=listen`.)
 - Outlet list sourced from `/v1/meta/outlets` (new) derived from distinct `stories.outlet`.
 
 **Exit.** User can follow 3 outlets + mute 1; Home respects soft filters after sync.

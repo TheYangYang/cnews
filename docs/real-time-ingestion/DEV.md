@@ -13,7 +13,7 @@ cnews/
 ├── realtime_ingestion/         # Python: RSS → brief → TTS → Mongo/S3
 ├── backend/                    # .NET 10 API (Kestrel / Lambda)
 ├── mobile/                     # Expo / React Native (CrackNews)
-├── scripts/                    # seed_demo_mongo, brief generators
+├── scripts/                    # seed_demo_mongo, seed_demo_ads, brief generators
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -49,6 +49,7 @@ cnews/
 cp .env.example .env
 docker compose up -d mongo postgres redis
 python3 scripts/seed_demo_mongo.py
+python3 scripts/seed_demo_ads.py
 # optional spoken demos:
 #   scripts/generate_demo_briefs.sh  or Kokoro generator
 ```
@@ -67,7 +68,8 @@ Smoke:
 
 ```bash
 curl -s http://127.0.0.1:5080/v1/health
-curl -s 'http://127.0.0.1:5080/v1/home/feed?limit=5' | head
+curl -s 'http://127.0.0.1:5080/v1/home/feed?limit=5&mode=listen' | head
+curl -s 'http://127.0.0.1:5080/v1/ads/display?slot=home_wall&limit=6'
 curl -s 'http://127.0.0.1:5080/v1/storylines?status=open&limit=5'
 ```
 
@@ -125,6 +127,10 @@ Configured in:
 
 Edit / re-run `scripts/seed_demo_mongo.py`, ensure covers under `backend/CNews.Api/wwwroot/media/covers/` and audio under `wwwroot/media/` (or S3 keys).
 
+### Add a display ad (seed)
+
+Edit / re-run `scripts/seed_demo_ads.py`. Images live under `backend/CNews.Api/wwwroot/media/ads/display/`. Slots: `home_wall`, `storylines_list`. Ads are **not** mixed into `/v1/home/feed`.
+
 ### Change Play behavior
 
 | Concern | File |
@@ -143,8 +149,9 @@ Stamps: `formatTimelineStamp` in `shared/utils/time.ts`
 
 | Surface | Hook | API |
 | --- | --- | --- |
-| Home | `useFeed` | `GET /v1/home/feed?cursor=` |
+| Home | `useFeed` | `GET /v1/home/feed?mode=listen&cursor=` |
 | Storylines | `useStorylines` | `GET /v1/storylines?cursor=` |
+| Display ads | `useFeed` / `useStorylines` | `GET /v1/ads/display?slot=` |
 
 Pull-to-refresh: fetch first page + `shuffleCopy` (not `newerThan` merge).
 
@@ -200,10 +207,10 @@ Original WebView → pause; close → resume if was playing
 
 ## Definition of done — local demo
 
-1. Seeded feed paints on Home masonry.
-2. Play speaks briefs with card highlight; advances in order.
+1. Seeded feed paints on Home masonry (voice-ready). Display ads may appear as labeled cards.
+2. Play speaks **story** briefs with card highlight; ads are skipped; advances left→right.
 3. Reader + Original WebView work above the tab bar; Play pauses/resumes around Original.
-4. Storylines list paginates; timeline shows stamps + connected nodes; Original pause/resume works.
+4. Storylines list paginates (ads may appear); timeline shows stamps + connected nodes; Original pause/resume works.
 5. Leaving a tab stops Play; Play on the new tab starts that page’s queue.
 6. Settings topics filter feed; Login `dev:` works.
 

@@ -24,7 +24,7 @@ cnews/
 | --- | --- | --- |
 | `realtime_ingestion/` | RSS, Ollama, Kokoro, Redis, publish to Mongo/S3 | HTTP for phones, UI |
 | `backend/` | `/v1` API, Google auth, Postgres users, signed audio URLs, Lambda/Docker | Ingest, TTS, Expo UI |
-| `mobile/` | Expo app, HeroUI Native, Zustand, device SQLite, UX | Mongo writes, GPU, Lambda packaging |
+| `mobile/` | Expo app, custom theme, Zustand, device SQLite, UX | Mongo writes, GPU, Lambda packaging |
 
 **Contract between backend ↔ mobile:** [api.md](./api.md) only.  
 **Contract between ingest ↔ backend:** MongoDB + S3 shapes in [data-model.md](./data-model.md).
@@ -140,7 +140,7 @@ Everything else is important but can slip without killing the loop.
 
 - [x] Env: `MONGODB_URI`, `S3_*`, `PUBLISH_REQUIRE_AUDIO`, `TTS_ENABLED`
 - [x] Idempotent upserts (safe re-run)
-- [x] Seed script for API/mobile without waiting on live RSS (`scripts/seed_demo_mongo.py`)
+- [x] Seed script for API/mobile without waiting on live RSS (`scripts/seed_demo_mongo.py`, `scripts/seed_demo_ads.py`)
 
 **Exit.** After one poll cycle, Mongo has a `textReady` story; listen-ready stories have S3 Opus.
 
@@ -199,7 +199,8 @@ Everything else is important but can slip without killing the loop.
 - [x] Storylines cursor pagination + shuffle refresh (API + client)
 - [x] Original WebView pause/resume Play (Home + Storylines)
 - [x] Background / lock-screen audio (`expo-audio` plugin; needs native rebuild)
-- [x] Settings topics; listening preference
+- [x] Settings topics only; Home always `mode=listen`
+- [x] Display ads: story-like cards on Home + Storylines (`GET /v1/ads/display`)
 - [x] **C7** Google Sign-In stub → JWT (`dev:` or real token); sync topics via `/v1/me/topics`
 - [ ] Point `EXPO_PUBLIC_API_BASE_URL` at LAN backend; validate iOS + Android phones *(operator device)*
 
@@ -344,3 +345,4 @@ flowchart LR
 | 2026-10-10 | Play is page-scoped; Original pauses/resumes; lock-screen audio planned |
 | 2026-10-10 | Pull refresh = shuffle fresh page (Home + Storylines) |
 | 2026-10-10 | Future: outlet subscribe + For You ranker — [upgrade-plan.md](./upgrade-plan.md) |
+| 2026-10-17 | Display ads as in-feed cards (not Play / not audio); Settings topics only |

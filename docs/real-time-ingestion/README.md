@@ -48,8 +48,9 @@ This folder is the product and engineering source of truth. **No application cod
 2. Tap a card → **in-tab** full-screen story; Original in WebView.
 3. Center **Play** speaks the current page’s briefs; leaving the page stops audio.
 4. **Storylines** → outlet timeline (timestamp · line · nodes · cards).
-5. Optional Google / `dev:` login; tune **topics** in Settings.
-6. Multi-outlet compare swipe is **deferred** — same story may still show as multiple wall cards.
+5. Optional Google / `dev:` login; tune **topics** in Settings (Home is always voice-ready).
+6. Display ads may appear as labeled cards on Home / Storylines; they are not in Play.
+7. Multi-outlet compare swipe is **deferred** — same story may still show as multiple wall cards.
 
 ## Design principles
 

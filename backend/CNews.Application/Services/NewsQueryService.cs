@@ -104,22 +104,47 @@ public sealed class NewsQueryService(
         }
 
         var (items, next) = await storylines.ListAsync(status, topics, limit, cursor, ct);
-        var summaries = items.Select(t =>
-        {
-            var latest = t.Updates.OrderByDescending(u => u.At).FirstOrDefault();
-            return new StorylineSummaryDto(
-                t.ThreadId,
-                t.Title,
-                t.Status,
-                t.UpdatedAt,
-                t.Updates.Count,
-                t.Topic,
-                t.Place,
-                latest?.ImageUrl,
-                latest?.Outlet,
-                latest?.StoryId);
-        }).ToArray();
+        var summaries = items.Select(ToStorylineSummary).ToArray();
         return new StorylineListDto(summaries, next);
+    }
+
+    public async Task<SearchResponseDto> SearchAsync(string? queryRaw, string mode, int limit, CancellationToken ct)
+    {
+        var query = SearchQuery.Normalize(queryRaw);
+        if (query is null)
+        {
+            return new SearchResponseDto([], [], DateTimeOffset.UtcNow);
+        }
+
+        limit = Math.Clamp(limit <= 0 ? 20 : limit, 1, 40);
+        var listenOnly = string.Equals(mode, "listen", StringComparison.OrdinalIgnoreCase);
+        var storyHits = await stories.SearchAsync(query, listenOnly, limit, ct);
+        var threadHits = await storylines.SearchAsync(query, Math.Min(8, limit), ct);
+
+        var cards = new List<StoryCardDto>(storyHits.Count);
+        foreach (var item in storyHits)
+        {
+            cards.Add(await ToCardAsync(item, includeAudioUrl: false, ct));
+        }
+
+        var threads = threadHits.Select(ToStorylineSummary).ToArray();
+        return new SearchResponseDto(cards, threads, DateTimeOffset.UtcNow);
+    }
+
+    private static StorylineSummaryDto ToStorylineSummary(Storyline thread)
+    {
+        var latest = thread.Updates.OrderByDescending(u => u.At).FirstOrDefault();
+        return new StorylineSummaryDto(
+            thread.ThreadId,
+            thread.Title,
+            thread.Status,
+            thread.UpdatedAt,
+            thread.Updates.Count,
+            thread.Topic,
+            thread.Place,
+            latest?.ImageUrl,
+            latest?.Outlet,
+            latest?.StoryId);
     }
 
     public async Task<StorylineDetailDto?> GetStorylineAsync(string threadId, CancellationToken ct)

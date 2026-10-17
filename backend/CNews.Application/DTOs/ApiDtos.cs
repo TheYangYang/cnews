@@ -20,6 +20,11 @@ public sealed record StoryCardDto(
 
 public sealed record FeedResponseDto(IReadOnlyList<StoryCardDto> Items, string? NextCursor, DateTimeOffset ServerTime);
 
+public sealed record SearchResponseDto(
+    IReadOnlyList<StoryCardDto> Stories,
+    IReadOnlyList<StorylineSummaryDto> Storylines,
+    DateTimeOffset ServerTime);
+
 public sealed record DisplayAdDto(
     string AdId,
     string Advertiser,

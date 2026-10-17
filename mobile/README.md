@@ -42,7 +42,8 @@ Start the backend first ([local development](../docs/real-time-ingestion/local-d
 | Tab | Role |
 | --- | --- |
 | **Home** | Staggered two-column masonry, no app-name header; tap story → in-tab reader; ads open the advertiser |
-| **▶ Play** (center) | Speaks visible **story** cards (left→right then top→bottom); ads skipped |
+| **▶ Play** (center) | Speaks the current page (Home wall, Search hits, or Storylines) |
+| **Search** | Lookup briefs + storylines; Play speaks matching stories |
 | **Storylines** | Ongoing / Closed lists (ads may appear); detail timeline newest-first |
 | **Settings** | Topic toggles only (Home is always voice-ready) |
 
@@ -78,6 +79,7 @@ mobile/
 See [api.md](../docs/real-time-ingestion/api.md):
 
 - `GET /v1/home/feed?mode=listen`
+- `GET /v1/search?q=&mode=listen`
 - `GET /v1/ads/display?slot=home_wall|storylines_list`
 - `GET /v1/stories/:id`, `GET /v1/stories/:id/audio-url`
 - `GET /v1/storylines`, `GET /v1/storylines/:id`

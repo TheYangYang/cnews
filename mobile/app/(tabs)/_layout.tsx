@@ -5,13 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { PlayTabButton } from '@/features/player/PlayTabButton';
 import { ToastBanner } from '@/shared/components/ToastBanner';
 import { usePlayerStore } from '@/data/stores/playerStore';
-import { useAuthStore } from '@/data/stores/authStore';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 
 export default function TabLayout() {
   const toast = usePlayerStore((s) => s.toastMessage);
   const clearToast = usePlayerStore((s) => s.clearToast);
-  const user = useAuthStore((s) => s.user);
   const { colors } = useTheme();
 
   return (
@@ -63,6 +61,15 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="search"
+          options={{
+            title: 'Search',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="search-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="settings"
           options={{
             title: 'Settings',
@@ -74,14 +81,8 @@ export default function TabLayout() {
         <Tabs.Screen
           name="login"
           options={{
-            title: user ? 'Account' : 'Login',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons
-                name={user ? 'person-circle' : 'person-circle-outline'}
-                size={size}
-                color={color}
-              />
-            ),
+            href: null,
+            title: 'Login',
           }}
         />
         <Tabs.Screen

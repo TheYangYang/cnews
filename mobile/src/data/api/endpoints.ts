@@ -12,6 +12,7 @@ import type {
   DisplayAdsResponse,
   GoogleAuthResponse,
   HomeFeedResponse,
+  SearchResponse,
   StoryDetailResponse,
   StorylineDetail,
   StorylineSummary,
@@ -70,6 +71,41 @@ export async function fetchDisplayAds(params?: {
       }),
     () => ({ items: [] }),
   );
+}
+
+export async function fetchSearch(params: {
+  q: string;
+  limit?: number;
+  token?: string | null;
+  mode?: 'any' | 'listen';
+}): Promise<SearchResponse> {
+  const qs = new URLSearchParams();
+  qs.set('q', params.q);
+  qs.set('mode', params.mode ?? 'listen');
+  if (params.limit) qs.set('limit', String(params.limit));
+  return useMockFallback(
+    () =>
+      apiRequest<SearchResponse>(`/v1/search?${qs.toString()}`, {
+        token: params.token,
+      }),
+    () => mockSearch(params.q),
+  );
+}
+
+function mockSearch(raw: string): SearchResponse {
+  const q = raw.trim().toLowerCase();
+  if (q.length < 2) {
+    return { stories: [], storylines: [], serverTime: new Date().toISOString() };
+  }
+  const hit = (parts: Array<string | undefined | null>) =>
+    parts.some((p) => (p ?? '').toLowerCase().includes(q));
+  const stories = MOCK_FEED.items.filter((s) =>
+    hit([s.title, s.summary, s.outlet, s.topic, s.place]),
+  );
+  const storylines = MOCK_STORYLINES.filter((t) =>
+    hit([t.title, t.topic, t.place, t.latestOutlet]),
+  );
+  return { stories, storylines, serverTime: new Date().toISOString() };
 }
 
 export async function fetchStory(

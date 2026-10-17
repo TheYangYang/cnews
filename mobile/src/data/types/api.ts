@@ -27,6 +27,12 @@ export interface HomeFeedResponse {
   serverTime: string;
 }
 
+export interface SearchResponse {
+  stories: StoryCard[];
+  storylines: StorylineSummary[];
+  serverTime: string;
+}
+
 export interface DisplayAd {
   adId: string;
   advertiser: string;

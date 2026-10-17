@@ -91,6 +91,32 @@ Separate from news and from audio ads. Not mixed into `/v1/home/feed`.
 
 The client may insert 0–1 of these as story-like cards: Home masonry (`home_wall`) or Storylines list (`storylines_list`). Play queues ignore them. No timeline or audio ads.
 
+## Search
+
+Lookup over published briefs. Not a recommender. Guest-accessible. Ads are not mixed in.
+
+### `GET /v1/search`
+
+```text
+?q=calgary&mode=listen&limit=20
+```
+
+| Query | Default | Notes |
+| --- | --- | --- |
+| `q` | — | Case-insensitive match on title, summary, outlet, topic, place (and storyline title/updates). Shorter than 2 characters → empty lists. |
+| `mode` | `listen` | `listen` = voice-ready stories only |
+| `limit` | `20` | max 40 stories; storylines capped at 8 |
+
+**200**
+
+```json
+{
+  "stories": [ /* StoryCard */ ],
+  "storylines": [ /* storyline summaries */ ],
+  "serverTime": "2026-10-17T21:00:00Z"
+}
+```
+
 ## Auth (Google → PostgreSQL)
 
 ### `POST /v1/auth/google`

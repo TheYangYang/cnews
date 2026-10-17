@@ -201,6 +201,7 @@ Everything else is important but can slip without killing the loop.
 - [x] Background / lock-screen audio (`expo-audio` plugin; needs native rebuild)
 - [x] Settings topics only; Home always `mode=listen`
 - [x] Display ads: story-like cards on Home + Storylines (`GET /v1/ads/display`)
+- [x] Search tab + `GET /v1/search`; Login hidden from tab bar
 - [x] **C7** Google Sign-In stub → JWT (`dev:` or real token); sync topics via `/v1/me/topics`
 - [ ] Point `EXPO_PUBLIC_API_BASE_URL` at LAN backend; validate iOS + Android phones *(operator device)*
 

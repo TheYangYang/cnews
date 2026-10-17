@@ -38,6 +38,7 @@ Brand: **CrackNews** (Expo app name; package `ca.cracknews.app`).
 | --- | --- |
 | `GET /v1/health` | Done |
 | `GET /v1/ads/display` | Done — first-party display ads; `slot=home_wall` or `storylines_list` (not in the news feed) |
+| `GET /v1/search` | Done — `q` match on stories + storylines; default `mode=listen` |
 | `GET /v1/home/feed` | Done — topics, cursor, `newerThan`; mobile always uses `mode=listen` |
 | `GET /v1/stories/{id}` | Done |
 | `GET /v1/stories/{id}/audio-url` | Done — signed / local media URL |
@@ -64,7 +65,7 @@ Guest browse of feed/storylines without JWT is allowed.
 - Pull-to-refresh → fresh first page, **shuffled** order (“fresh mix”), pagination reset. Ads re-roll (sometimes none).
 - Feed is **not** geo-located. Topics (including `Local`) are desks, not the user’s city.
 - System dark mode; typographic **C** icon + black splash.
-- Tabs: **Home · Storylines · Play · Settings · Login**.
+- Tabs: **Home · Storylines · Play · Search · Settings**. Login is hidden (guest is enough).
 
 ### Mobile — Storylines
 
@@ -85,11 +86,19 @@ Guest browse of feed/storylines without JWT is allowed.
 - **Background / lock-screen playback** (Spotify-style): `shouldPlayInBackground`, lock-screen metadata, `expo-audio` `enableBackgroundPlayback` — requires a **native rebuild** (not Expo Go alone).
 - Long-press Play → hard stop.
 
+### Mobile — Search
+
+- Tab between Play and Settings so the Play button stays centered.
+- `GET /v1/search?q=&mode=listen` plus on-device cache filter. No ads.
+- Tap a story → same in-tab reader (pager is the search hits). Tap a storyline → timeline.
+- Center Play speaks **matching stories** in list order. Empty query: “Search for a story first.”
+
 ### Mobile — Settings / Login
 
 - Topic toggles only (no listening-mode radios, no About).
+- Support banner: Buy Me a Coffee (in-app browser). Link in `mobile/src/shared/config/support.ts`.
 - Home is always voice-ready (`GET /v1/home/feed?mode=listen`). Play still skips any card without audio.
-- Google Sign-In stub → `dev:` JWT; topics sync via `/v1/me/topics`.
+- Login tab is **hidden**. Guest browse is the product; the `/login` route still exists for later.
 
 ### Multi-outlet “compare”
 
@@ -112,9 +121,11 @@ Guest browse of feed/storylines without JWT is allowed.
 | `mobile/src/features/storylines/StorylinesScreen.tsx` | List + pagination + display ads |
 | `mobile/src/features/storylines/StorylineAdCard.tsx` | Full-width storyline-style ad card |
 | `mobile/src/features/storylines/StorylineReaderScreen.tsx` | Outlet timeline + Original pause/resume |
+| `mobile/src/features/search/SearchScreen.tsx` | Search tab + Play queue |
 | `mobile/src/features/player/PlayTabButton.tsx` | Surface-aware Play |
 | `mobile/src/data/stores/playerStore.ts` | Queue, expo-audio, lock screen |
-| `mobile/src/data/stores/playSurfaceStore.ts` | `home` \| `storylines` ownership |
+| `mobile/src/data/stores/playSurfaceStore.ts` | `home` \| `storylines` \| `search` ownership |
+| `mobile/src/shared/hooks/useSearch.ts` | Debounced `/v1/search` + cache |
 | `mobile/src/shared/hooks/useFeed.ts` | Home cursor + shuffle refresh |
 | `mobile/src/shared/hooks/useStorylines.ts` | Storylines cursor + shuffle refresh |
 
@@ -150,3 +161,4 @@ Guest browse of feed/storylines without JWT is allowed.
 | 2026-10-17 | Display ads: story-like cards on Home + Storylines list; not in Play |
 | 2026-10-17 | Voice-first: Home always `mode=listen`; Settings topics only |
 | 2026-10-17 | Pull-to-refresh while Play: keep current brief, rebind remaining queue |
+| 2026-10-17 | Search tab + `GET /v1/search`; Login hidden from the tab bar |

@@ -39,10 +39,15 @@ export function StoryReaderScreen({ storyId }: Props) {
   const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { items, isLoading, loadMore, hasMore, loadingMore } = useFeed();
+  const { items: feedItems, isLoading, loadMore, hasMore, loadingMore } = useFeed();
+  const searchStories = usePlaySurfaceStore((s) => s.searchStories);
+  const readerSource = usePlaySurfaceStore((s) => s.readerSource);
   const setSurface = usePlaySurfaceStore((s) => s.setSurface);
   const setReaderQueue = usePlaySurfaceStore((s) => s.setReaderQueue);
   const clearReaderQueue = usePlaySurfaceStore((s) => s.clearReaderQueue);
+  const fromSearch =
+    readerSource === 'search' && searchStories.some((s) => s.storyId === storyId);
+  const items = fromSearch ? searchStories : feedItems;
   const listRef = useRef<FlatList<StoryCard>>(null);
 
   const [pageH, setPageH] = useState(0);
@@ -55,11 +60,13 @@ export function StoryReaderScreen({ storyId }: Props) {
   const loadingMoreRef = useRef(false);
   const loadMoreRef = useRef(loadMore);
 
+  const fromSearchRef = useRef(fromSearch);
   itemsRef.current = items;
   itemsLenRef.current = items.length;
   hasMoreRef.current = hasMore;
   loadingMoreRef.current = loadingMore;
   loadMoreRef.current = loadMore;
+  fromSearchRef.current = fromSearch;
 
   const startIndex = useMemo(() => {
     const i = items.findIndex((s) => s.storyId === storyId);
@@ -153,6 +160,7 @@ export function StoryReaderScreen({ storyId }: Props) {
       }
       syncReaderPlayQueueRef.current(v.index);
       if (
+        !fromSearchRef.current &&
         v.index >= itemsLenRef.current - 3 &&
         hasMoreRef.current &&
         !loadingMoreRef.current

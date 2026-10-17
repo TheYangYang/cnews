@@ -15,7 +15,7 @@ import { useTheme } from '@/shared/theme/ThemeProvider';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-/** Play is scoped to the focused page: Home wall, in-tab reader, or Storylines. */
+/** Play is scoped to the focused page: Home wall, Search, in-tab reader, or Storylines. */
 export function PlayTabButton() {
   const { colors } = useTheme();
   const { items } = useFeed();
@@ -24,6 +24,7 @@ export function PlayTabButton() {
   const surface = usePlaySurfaceStore((s) => s.surface);
   const storylineStories = usePlaySurfaceStore((s) => s.storylineStories);
   const storylineOrderedIds = usePlaySurfaceStore((s) => s.storylineOrderedIds);
+  const searchStories = usePlaySurfaceStore((s) => s.searchStories);
   const readerOrderedIds = usePlaySurfaceStore((s) => s.readerOrderedIds);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
@@ -55,11 +56,25 @@ export function PlayTabButton() {
       return;
     }
 
-    // In-tab reader: start from the open card, then continue down the feed.
+    if (surface === 'search') {
+      if (!searchStories.length) {
+        usePlayerStore.setState({ toastMessage: 'Search for a story first' });
+        return;
+      }
+      const ordered = searchStories.map((s) => s.storyId);
+      void startWall(searchStories, ordered).catch(() => {
+        void stop();
+      });
+      return;
+    }
+
+    // In-tab reader: start from the open card, then continue down this pager.
     if (surface === 'reader') {
       const ordered =
         readerOrderedIds.length > 0 ? readerOrderedIds : items.map((s) => s.storyId);
-      void startWall(items, ordered).catch(() => {
+      const fromSearch = usePlaySurfaceStore.getState().readerSource === 'search';
+      const pool = fromSearch && searchStories.length ? searchStories : items;
+      void startWall(pool, ordered).catch(() => {
         void stop();
       });
       return;

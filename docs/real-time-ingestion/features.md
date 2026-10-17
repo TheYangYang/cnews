@@ -90,6 +90,19 @@ Text-first publish is allowed when audio is disabled or still pending; the API m
 
 **Done when.** From a populated Home wall, Play audibly walks visible ready cards; switching tabs stops audio.
 
+## F6b — Search
+
+**Outcome.** The user can type a city, outlet, or headline word and get matching briefs (and storylines). Play speaks those hits.
+
+**Status.** **Shipped.**
+
+**Details.**
+
+- `GET /v1/search?q=&mode=listen` plus on-device cache. Not a recommender. No ads.
+- Tabs: Home · Storylines · Play · Search · Settings (Login hidden).
+
+**Done when.** Searching a seeded place or outlet returns cards; Play reads the result list.
+
 ## F6 — Topic preferences in Settings
 
 **Outcome.** The user controls which desks fill Home and lists.
@@ -150,7 +163,7 @@ Text-first publish is allowed when audio is disabled or still pending; the API m
 
 ## F10 — Human-friendly mobile UX
 
-**Outcome.** Immersive RedNote-like wall, full-screen reader, center Play, Storylines timeline; tabs: Home · Storylines · Play · Settings · Login.
+**Outcome.** Immersive RedNote-like wall, full-screen reader, center Play, Search, Storylines timeline; tabs: Home · Storylines · Play · Search · Settings.
 
 **Status.** **Shipped** (coverage swipe excluded — see F7).
 

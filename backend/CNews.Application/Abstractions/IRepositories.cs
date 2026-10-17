@@ -13,6 +13,8 @@ public interface IStoryRepository
         CancellationToken ct);
 
     Task<Story?> GetByIdAsync(string storyId, CancellationToken ct);
+
+    Task<IReadOnlyList<Story>> SearchAsync(string query, bool listenOnly, int limit, CancellationToken ct);
 }
 
 public interface ICoverageRepository
@@ -30,6 +32,8 @@ public interface IStorylineRepository
         CancellationToken ct);
 
     Task<Storyline?> GetByIdAsync(string threadId, CancellationToken ct);
+
+    Task<IReadOnlyList<Storyline>> SearchAsync(string query, int limit, CancellationToken ct);
 }
 
 public interface IUserRepository

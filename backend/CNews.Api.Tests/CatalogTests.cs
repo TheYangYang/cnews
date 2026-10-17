@@ -26,4 +26,12 @@ public class CatalogTests
         Assert.EndsWith("…", preview);
         Assert.True(preview.Length <= 50);
     }
+
+    [Fact]
+    public void SearchQuery_requires_two_characters()
+    {
+        Assert.Null(SearchQuery.Normalize(" "));
+        Assert.Null(SearchQuery.Normalize("c"));
+        Assert.Equal("CBC", SearchQuery.Normalize("  CBC  "));
+    }
 }

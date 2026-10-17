@@ -56,6 +56,17 @@ public static class V1Endpoints
             }
         });
 
+        v1.MapGet("/search", async (
+            [FromServices] NewsQueryService news,
+            [FromQuery] string? q,
+            [FromQuery] string? mode,
+            [FromQuery] int? limit,
+            CancellationToken ct) =>
+        {
+            var result = await news.SearchAsync(q, mode ?? "listen", limit ?? 20, ct);
+            return Results.Ok(result);
+        });
+
         v1.MapGet("/stories/{storyId}", async (string storyId, NewsQueryService news, CancellationToken ct) =>
         {
             var detail = await news.GetStoryAsync(storyId, ct);

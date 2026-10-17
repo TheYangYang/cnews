@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CNews.Application.Abstractions;
 using CNews.Domain.Entities;
 using Microsoft.Extensions.Options;
@@ -59,6 +60,26 @@ public sealed class MongoStorylineRepository(IOptions<MongoOptions> options) : I
         }
 
         return (items, next);
+    }
+
+    public async Task<IReadOnlyList<Storyline>> SearchAsync(string query, int limit, CancellationToken ct)
+    {
+        var take = Math.Clamp(limit, 1, 20);
+        var regex = new BsonRegularExpression(Regex.Escape(query), "i");
+        var filter = Builders<BsonDocument>.Filter.Or(
+            Builders<BsonDocument>.Filter.Regex("title", regex),
+            Builders<BsonDocument>.Filter.Regex("topic", regex),
+            Builders<BsonDocument>.Filter.Regex("place", regex),
+            Builders<BsonDocument>.Filter.ElemMatch("updates", Builders<BsonDocument>.Filter.Regex("summary", regex)),
+            Builders<BsonDocument>.Filter.ElemMatch("updates", Builders<BsonDocument>.Filter.Regex("outlet", regex)),
+            Builders<BsonDocument>.Filter.ElemMatch("updates", Builders<BsonDocument>.Filter.Regex("title", regex)));
+
+        var docs = await _threads.Find(filter)
+            .Sort(Builders<BsonDocument>.Sort.Descending("updatedAt").Descending("threadId"))
+            .Limit(take)
+            .ToListAsync(ct);
+
+        return docs.Select(Map).ToArray();
     }
 
     public async Task<Storyline?> GetByIdAsync(string threadId, CancellationToken ct)

@@ -29,9 +29,9 @@ A **lightweight, immersive discovery feed** you can skim like RedNote (小红书
 ## Information architecture
 
 ```text
-┌──────┬────────────┬──────────┬──────────┬───────┐
-│ Home │ Storylines │  ▶ Play  │ Settings │ Login │
-└──────┴────────────┴──────────┴──────────┴───────┘
+┌──────┬────────────┬──────────┬────────┬──────────┐
+│ Home │ Storylines │  ▶ Play  │ Search │ Settings │
+└──────┴────────────┴──────────┴────────┴──────────┘
 ```
 
 | Slot | Job |
@@ -39,8 +39,8 @@ A **lightweight, immersive discovery feed** you can skim like RedNote (小红书
 | Home | Masonry wall + vertical full-screen reader |
 | Storylines | Ongoing / Closed / All + outlet timeline reader |
 | Play | Speaks the **current page’s** queue (not a destination tab) |
+| Search | Lookup briefs + storylines; Play speaks matching stories |
 | Settings | Topic toggles only (Home is always voice-ready) |
-| Login | Google / `dev:` account |
 
 Deep links (later): `cnews://story/{id}`, `cnews://storyline/{threadId}`.
 
@@ -53,6 +53,7 @@ Deep links (later): `cnews://story/{id}`, `cnews://storyline/{threadId}`.
 | Focused screen | Queue |
 | --- | --- |
 | Home wall | Visible **story** cards, left→right then top→bottom (ads skipped) |
+| Search | Matching stories in list order (ads skipped) |
 | Storylines list | Up to ~8 open threads’ outlet briefs |
 | Storyline detail | That thread’s updates in order |
 
@@ -129,12 +130,20 @@ API `GET /v1/coverage/{clusterId}` exists. Horizontal outlet swipe is **not** in
 
 ---
 
-## 3. Settings + Login
+## 3. Search
 
-- Topics from `/v1/meta/topics`; sync to Postgres when signed in.
+- Debounced `GET /v1/search?q=&mode=listen` plus on-device cache.
+- Matches title, summary, outlet, topic, place (and storyline titles).
+- No ads. Guest. Not a recommender.
+- Play on this tab speaks the story hits; storyline rows open the timeline.
+
+---
+
+## 4. Settings + Login
+
+- Topics from `/v1/meta/topics` (on-device). Login tab is hidden.
 - No listening-mode radios and no About — Home is always voice-ready.
-- Login: Google stub / `dev:email@…`.
-- Future outlet subscribe + For You ranking: [upgrade-plan.md](./upgrade-plan.md).
+- Future outlet subscribe + For You ranking: [upgrade-plan.md](./upgrade-plan.md) (not in progress).
 
 ---
 
@@ -159,5 +168,6 @@ Motion: wall/list enter fades; speaking highlight; timeline row enter.
 3. Center Play on Home speaks visible **stories** left→right; ads skipped; leaving Home stops audio.  
 4. Storylines paginate (ads may appear in the list); timeline shows stamps + connected icons + cards.  
 5. Play on a storyline speaks that thread; Original pause/resume works.  
-6. Settings topics filter the wall; Login `dev:` works.  
-7. (Dev client) Lock screen shows CrackNews brief metadata while playing.  
+6. Search finds a seeded story (e.g. Calgary / CBC); Play speaks those hits.  
+7. Settings topics filter the wall.  
+8. (Dev client) Lock screen shows CrackNews brief metadata while playing.  

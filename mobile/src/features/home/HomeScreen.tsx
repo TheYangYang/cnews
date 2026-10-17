@@ -25,11 +25,16 @@ export function HomeScreen() {
   const { width } = useWindowDimensions();
   const router = useRouter();
   const setSurface = usePlaySurfaceStore((s) => s.setSurface);
+  const setReaderSource = usePlaySurfaceStore((s) => s.setReaderSource);
   const rebindWallQueueTail = usePlayerStore((s) => s.rebindWallQueueTail);
 
   useFocusEffect(
     useCallback(() => {
+      const prev = usePlaySurfaceStore.getState().surface;
       setSurface('home');
+      if (prev === 'search') {
+        void usePlayerStore.getState().stop();
+      }
     }, [setSurface]),
   );
   const {
@@ -51,12 +56,13 @@ export function HomeScreen() {
       if (speaking && speaking !== story.storyId) {
         void usePlayerStore.getState().stop();
       }
+      setReaderSource('feed');
       router.push({
         pathname: '/(tabs)/story/[id]',
         params: { id: story.storyId },
       });
     },
-    [router],
+    [router, setReaderSource],
   );
 
   const onAdPress = useCallback(async (ad: DisplayAd) => {

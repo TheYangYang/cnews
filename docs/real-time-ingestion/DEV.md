@@ -70,6 +70,7 @@ Smoke:
 curl -s http://127.0.0.1:5080/v1/health
 curl -s 'http://127.0.0.1:5080/v1/home/feed?limit=5&mode=listen' | head
 curl -s 'http://127.0.0.1:5080/v1/ads/display?slot=home_wall&limit=6'
+curl -s 'http://127.0.0.1:5080/v1/search?q=calgary&mode=listen'
 curl -s 'http://127.0.0.1:5080/v1/storylines?status=open&limit=5'
 ```
 
@@ -152,6 +153,7 @@ Stamps: `formatTimelineStamp` in `shared/utils/time.ts`
 | Home | `useFeed` | `GET /v1/home/feed?mode=listen&cursor=` |
 | Storylines | `useStorylines` | `GET /v1/storylines?cursor=` |
 | Display ads | `useFeed` / `useStorylines` | `GET /v1/ads/display?slot=` |
+| Search | `useSearch` | `GET /v1/search?q=` |
 
 Pull-to-refresh: fetch first page + `shuffleCopy` (not `newerThan` merge).
 
@@ -212,7 +214,8 @@ Original WebView → pause; close → resume if was playing
 3. Reader + Original WebView work above the tab bar; Play pauses/resumes around Original.
 4. Storylines list paginates (ads may appear); timeline shows stamps + connected nodes; Original pause/resume works.
 5. Leaving a tab stops Play; Play on the new tab starts that page’s queue.
-6. Settings topics filter feed; Login `dev:` works.
+6. Search finds a seeded story; Play speaks those hits.
+7. Settings topics filter feed.
 
 ---
 

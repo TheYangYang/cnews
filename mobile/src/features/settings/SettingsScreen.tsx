@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -10,12 +11,15 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { fetchTopicsMeta } from '@/data/api/endpoints';
 import { useAuthStore } from '@/data/stores/authStore';
 import { usePlayerStore } from '@/data/stores/playerStore';
 import { useSettingsStore } from '@/data/stores/settingsStore';
+import { SUPPORT_LINKS } from '@/shared/config/support';
 import { Screen } from '@/shared/components/Screen';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 import { motion } from '@/shared/theme/motion';
@@ -55,9 +59,29 @@ export function SettingsScreen() {
           </Text>
         </Animated.View>
 
-        <Text style={[styles.section, { color: colors.textMuted }]}>Topics</Text>
         <Animated.View
           entering={FadeInDown.delay(60).duration(motion.duration.base)}
+          style={[
+            styles.support,
+            { backgroundColor: colors.accentSoft, borderColor: colors.border },
+          ]}>
+          <Text style={[styles.supportTitle, { color: colors.ink }]}>Keep CrackNews independent</Text>
+          <Text style={[styles.supportBody, { color: colors.textSecondary }]}>
+            Briefs stay free. A coffee helps cover ingest and speech.
+          </Text>
+          <Pressable
+            onPress={() => void WebBrowser.openBrowserAsync(SUPPORT_LINKS.buyMeACoffee)}
+            style={[styles.supportBtn, { backgroundColor: colors.accentBright }]}
+            accessibilityRole="link"
+            accessibilityLabel="Buy us a coffee">
+            <Ionicons name="cafe" size={16} color={colors.onAccent} />
+            <Text style={[styles.supportBtnText, { color: colors.onAccent }]}>Buy us a coffee</Text>
+          </Pressable>
+        </Animated.View>
+
+        <Text style={[styles.section, { color: colors.textMuted }]}>Topics</Text>
+        <Animated.View
+          entering={FadeInDown.delay(120).duration(motion.duration.base)}
           style={[styles.card, card]}>
           {topicsQuery.isLoading ? (
             <ActivityIndicator color={colors.accent} />
@@ -84,7 +108,7 @@ export function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: spacing.lg, paddingBottom: 40 },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: 110 },
   heading: {
     fontSize: 30,
     fontWeight: '800',
@@ -92,7 +116,7 @@ const styles = StyleSheet.create({
   },
   sub: {
     marginTop: 6,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     fontSize: 15,
     lineHeight: 21,
   },
@@ -117,4 +141,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   topicLabel: { fontSize: 16, fontWeight: '500' },
+  support: {
+    borderRadius: 16,
+    padding: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  supportTitle: { fontSize: 17, fontWeight: '700' },
+  supportBody: { fontSize: 14, lineHeight: 20 },
+  supportBtn: {
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  supportBtnText: { fontSize: 15, fontWeight: '700' },
 });

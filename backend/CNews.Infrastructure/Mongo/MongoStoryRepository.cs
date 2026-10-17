@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CNews.Application.Abstractions;
 using CNews.Domain.Entities;
 using Microsoft.Extensions.Options;
@@ -70,6 +71,34 @@ public sealed class MongoStoryRepository(IOptions<MongoOptions> options) : IStor
     {
         var doc = await _stories.Find(Builders<BsonDocument>.Filter.Eq("storyId", storyId)).FirstOrDefaultAsync(ct);
         return doc is null ? null : MapStory(doc);
+    }
+
+    public async Task<IReadOnlyList<Story>> SearchAsync(string query, bool listenOnly, int limit, CancellationToken ct)
+    {
+        var take = Math.Clamp(limit, 1, 40);
+        var regex = new BsonRegularExpression(Regex.Escape(query), "i");
+        var text = Builders<BsonDocument>.Filter.Or(
+            Builders<BsonDocument>.Filter.Regex("title", regex),
+            Builders<BsonDocument>.Filter.Regex("summary", regex),
+            Builders<BsonDocument>.Filter.Regex("outlet", regex),
+            Builders<BsonDocument>.Filter.Regex("topic", regex),
+            Builders<BsonDocument>.Filter.Regex("place", regex));
+
+        var filter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("textReady", true),
+            text);
+
+        if (listenOnly)
+        {
+            filter &= Builders<BsonDocument>.Filter.Eq("listenReady", true);
+        }
+
+        var docs = await _stories.Find(filter)
+            .Sort(Builders<BsonDocument>.Sort.Descending("publishedAt").Descending("storyId"))
+            .Limit(take)
+            .ToListAsync(ct);
+
+        return docs.Select(MapStory).ToArray();
     }
 
     internal static Story MapStory(BsonDocument doc) => new()

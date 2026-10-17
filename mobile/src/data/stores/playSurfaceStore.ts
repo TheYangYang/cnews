@@ -2,12 +2,15 @@ import { create } from 'zustand';
 
 import type { StoryCard } from '@/data/types/api';
 
-export type PlaySurface = 'home' | 'storylines' | 'reader';
+export type PlaySurface = 'home' | 'storylines' | 'reader' | 'search';
 
 type PlaySurfaceState = {
   surface: PlaySurface;
   storylineStories: StoryCard[];
   storylineOrderedIds: string[];
+  searchStories: StoryCard[];
+  /** Which list the in-tab reader should page through. */
+  readerSource: 'feed' | 'search';
   /** Feed story ids from the open reader page onward (for Play in reader). */
   readerOrderedIds: string[];
   /** storyId → threadId for list highlighting while Play advances. */
@@ -17,6 +20,8 @@ type PlaySurfaceState = {
     stories: StoryCard[],
     opts?: { orderedIds?: string[]; storyIdToThreadId?: Record<string, string> },
   ) => void;
+  setSearchQueue: (stories: StoryCard[]) => void;
+  setReaderSource: (source: 'feed' | 'search') => void;
   setReaderQueue: (orderedIds: string[]) => void;
   clearStorylineQueue: () => void;
   clearReaderQueue: () => void;
@@ -26,6 +31,8 @@ export const usePlaySurfaceStore = create<PlaySurfaceState>((set) => ({
   surface: 'home',
   storylineStories: [],
   storylineOrderedIds: [],
+  searchStories: [],
+  readerSource: 'feed',
   readerOrderedIds: [],
   storyIdToThreadId: {},
   setSurface: (surface) => set({ surface }),
@@ -35,6 +42,8 @@ export const usePlaySurfaceStore = create<PlaySurfaceState>((set) => ({
       storylineOrderedIds: opts?.orderedIds ?? stories.map((s) => s.storyId),
       storyIdToThreadId: opts?.storyIdToThreadId ?? {},
     }),
+  setSearchQueue: (stories) => set({ searchStories: stories }),
+  setReaderSource: (source) => set({ readerSource: source }),
   setReaderQueue: (orderedIds) => set({ readerOrderedIds: orderedIds }),
   clearStorylineQueue: () =>
     set({ storylineStories: [], storylineOrderedIds: [], storyIdToThreadId: {} }),

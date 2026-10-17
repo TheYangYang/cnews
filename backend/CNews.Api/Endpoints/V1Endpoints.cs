@@ -19,8 +19,7 @@ public static class V1Endpoints
             [FromQuery] int? limit,
             CancellationToken ct) =>
         {
-            _ = slot;
-            var result = await ads.ListAsync(limit ?? 6, ct);
+            var result = await ads.ListAsync(slot, limit ?? 6, ct);
             return Results.Ok(result);
         });
 

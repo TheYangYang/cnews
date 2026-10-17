@@ -1,4 +1,8 @@
-import type { DisplayAd, StoryCard, WallItem } from '@/data/types/api';
+import type { DisplayAd, StoryCard, StorylineSummary, WallItem } from '@/data/types/api';
+
+export type StorylineListItem =
+  | { kind: 'thread'; thread: StorylineSummary }
+  | { kind: 'ad'; ad: DisplayAd };
 
 export function storiesToWall(stories: StoryCard[]): WallItem[] {
   return stories.map((story) => ({ kind: 'story', story }));
@@ -36,4 +40,23 @@ export function wallItemAspect(item: WallItem): number {
 
 export function storiesFromWall(items: WallItem[]): StoryCard[] {
   return items.filter((item): item is { kind: 'story'; story: StoryCard } => item.kind === 'story').map((item) => item.story);
+}
+
+export function mixStorylineAds(
+  threads: StorylineSummary[],
+  ads: DisplayAd[],
+  opts?: { fillRate?: number; random?: () => number },
+): StorylineListItem[] {
+  const list: StorylineListItem[] = threads.map((thread) => ({ kind: 'thread', thread }));
+  const rnd = opts?.random ?? Math.random;
+  const fillRate = opts?.fillRate ?? 0.55;
+  if (!ads.length || threads.length < 2 || rnd() > fillRate) return list;
+
+  const ad = ads[Math.floor(rnd() * ads.length)];
+  if (!ad) return list;
+
+  const max = Math.min(threads.length - 1, 2);
+  const slot = 1 + Math.floor(rnd() * Math.max(1, max));
+  list.splice(slot, 0, { kind: 'ad', ad });
+  return list;
 }

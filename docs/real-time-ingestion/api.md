@@ -69,7 +69,7 @@ Separate from news and from audio ads. Not mixed into `/v1/home/feed`.
 ### `GET /v1/ads/display`
 
 ```text
-?slot=home_wall&limit=6
+?slot=home_wall|storylines_list&limit=6
 ```
 
 **200**
@@ -89,7 +89,7 @@ Separate from news and from audio ads. Not mixed into `/v1/home/feed`.
 }
 ```
 
-The client may insert 0–1 of these into the masonry wall (story-like card, labeled Ad). Play queue ignores them.
+The client may insert 0–1 of these as story-like cards: Home masonry (`home_wall`) or Storylines list (`storylines_list`). Play queues ignore them. No timeline or audio ads.
 
 ## Auth (Google → PostgreSQL)
 

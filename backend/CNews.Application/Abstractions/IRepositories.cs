@@ -47,7 +47,7 @@ public interface IUserRepository
 
 public interface IDisplayAdRepository
 {
-    Task<IReadOnlyList<DisplayAd>> ListActiveAsync(int limit, CancellationToken ct);
+    Task<IReadOnlyList<DisplayAd>> ListActiveAsync(string? slot, int limit, CancellationToken ct);
 }
 
 public interface IAudioUrlService

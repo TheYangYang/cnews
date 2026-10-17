@@ -67,6 +67,7 @@ Guest browse of feed/storylines without JWT is allowed.
 ### Mobile — Storylines
 
 - List with Ongoing / Closed / All filters.
+- Display ads may appear as full-width storyline-style cards (labeled Ad); tap opens the advertiser. Not in Play or the timeline.
 - Cursor page size 10; scroll down loads more; pull-to-refresh reshuffles.
 - In-tab storyline reader: hero + **outlet timeline**.
 - Timeline: real **clock timestamps**, icon nodes, continuous spine **from first node center to last** (no dangling stem past the last item), cards kept (thumb / title / summary / Original).
@@ -84,7 +85,7 @@ Guest browse of feed/storylines without JWT is allowed.
 
 ### Mobile — Settings / Login
 
-- Topic toggles + listening preference (`voice_ready_only` vs any).
+- Topic toggles. Home feed is always voice-ready (`mode=listen`).
 - Google Sign-In stub → `dev:` JWT; topics sync via `/v1/me/topics`.
 
 ### Multi-outlet “compare”

@@ -11,12 +11,18 @@ public sealed class MongoDisplayAdRepository(IOptions<MongoOptions> options) : I
     private readonly IMongoCollection<BsonDocument> _ads =
         new MongoClient(options.Value.Uri).GetDatabase(options.Value.Database).GetCollection<BsonDocument>("display_ads");
 
-    public async Task<IReadOnlyList<DisplayAd>> ListActiveAsync(int limit, CancellationToken ct)
+    public async Task<IReadOnlyList<DisplayAd>> ListActiveAsync(string? slot, int limit, CancellationToken ct)
     {
         var take = Math.Clamp(limit, 1, 12);
-        var docs = await _ads.Find(Builders<BsonDocument>.Filter.Eq("active", true))
-            .Limit(take)
-            .ToListAsync(ct);
+        var filter = Builders<BsonDocument>.Filter.Eq("active", true);
+        if (!string.IsNullOrWhiteSpace(slot))
+        {
+            filter &= Builders<BsonDocument>.Filter.Or(
+                Builders<BsonDocument>.Filter.Eq("slot", slot),
+                Builders<BsonDocument>.Filter.AnyEq("slots", slot));
+        }
+
+        var docs = await _ads.Find(filter).Limit(take).ToListAsync(ct);
         return docs.Select(Map).ToArray();
     }
 

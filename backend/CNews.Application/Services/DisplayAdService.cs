@@ -5,10 +5,10 @@ namespace CNews.Application.Services;
 
 public sealed class DisplayAdService(IDisplayAdRepository ads, IAudioUrlService mediaUrls)
 {
-    public async Task<DisplayAdsResponseDto> ListAsync(int limit, CancellationToken ct)
+    public async Task<DisplayAdsResponseDto> ListAsync(string? slot, int limit, CancellationToken ct)
     {
         limit = Math.Clamp(limit <= 0 ? 6 : limit, 1, 12);
-        var rows = await ads.ListActiveAsync(limit, ct);
+        var rows = await ads.ListActiveAsync(slot, limit, ct);
         var items = new List<DisplayAdDto>(rows.Count);
         foreach (var ad in rows)
         {

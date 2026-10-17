@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed first-party Home-wall display ads (no AdMob). Audio ads are a separate system."""
+"""Seed first-party display ads (Home wall + Storylines list). Audio ads are a separate system."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ ADS = [
         "imageAspect": 0.74,
         "active": True,
         "slot": "home_wall",
+        "slots": ["home_wall"],
     },
     {
         "adId": "display_demo_2",
@@ -27,7 +28,8 @@ ADS = [
         "imageKey": "local/ads/display/ad_demo_2.jpg",
         "imageAspect": 0.68,
         "active": True,
-        "slot": "home_wall",
+        "slot": "storylines_list",
+        "slots": ["home_wall", "storylines_list"],
     },
     {
         "adId": "display_demo_3",
@@ -37,7 +39,8 @@ ADS = [
         "imageKey": "local/ads/display/ad_demo_3.jpg",
         "imageAspect": 0.72,
         "active": True,
-        "slot": "home_wall",
+        "slot": "storylines_list",
+        "slots": ["storylines_list"],
     },
 ]
 

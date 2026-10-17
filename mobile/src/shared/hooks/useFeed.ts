@@ -12,7 +12,6 @@ import { shuffleCopy } from '@/shared/utils/shuffle';
 export function useFeed() {
   const token = useAuthStore((s) => s.accessToken);
   const topics = useSettingsStore((s) => s.selectedTopics);
-  const listeningPreference = useSettingsStore((s) => s.listeningPreference);
   const [cached, setCached] = useState<StoryCard[]>([]);
   const [items, setItems] = useState<StoryCard[]>([]);
   const [wallItems, setWallItems] = useState<WallItem[]>([]);
@@ -21,7 +20,7 @@ export function useFeed() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const mode = listeningPreference === 'voice_ready_only' ? 'listen' : 'any';
+  const mode = 'listen' as const;
   const pageSize = 10;
 
   useEffect(() => {

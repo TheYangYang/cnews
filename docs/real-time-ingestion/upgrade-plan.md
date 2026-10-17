@@ -44,7 +44,7 @@ Expand what we store per user (Postgres), mirror on device for offline Settings.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `topics` | string[] | Existing |
-| `listeningPreference` | enum | Existing (`any` / `voice_ready_only`) |
+| (voice-ready) | — | Home is always `mode=listen`; not a user pref |
 | `preferredOutlets` | string[] | e.g. `CBC`, `Global News` — **subscribe** |
 | `mutedOutlets` | string[] | Soft-hide from Home |
 | `preferredPlaces` | string[] | Province / city labels from ingest |

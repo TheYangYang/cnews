@@ -14,7 +14,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 
+import * as WebBrowser from 'expo-web-browser';
 import { fetchStorylineDetail, fetchStorylines } from '@/data/api/endpoints';
+import { StorylineAdCard } from '@/features/storylines/StorylineAdCard';
 import { StorylineCard } from '@/features/storylines/StorylineCard';
 import { updatesToCards } from '@/features/storylines/storylineUtils';
 import { useAuthStore } from '@/data/stores/authStore';
@@ -26,7 +28,7 @@ import { useStorylines } from '@/shared/hooks/useStorylines';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 import { motion } from '@/shared/theme/motion';
 import { spacing } from '@/shared/theme/spacing';
-import type { StorylineStatus } from '@/data/types/api';
+import type { DisplayAd, StorylineStatus } from '@/data/types/api';
 
 type Filter = 'open' | 'closed' | 'all';
 
@@ -46,6 +48,7 @@ export function StorylinesScreen() {
   const [filter, setFilter] = useState<Filter>('open');
   const {
     items,
+    listItems,
     isLoading,
     isRefetching,
     loadingMore,
@@ -89,6 +92,11 @@ export function StorylinesScreen() {
       };
     }, [setSurface, refreshPlayQueue]),
   );
+
+  const onAdPress = useCallback(async (ad: DisplayAd) => {
+    if (!ad.clickUrl) return;
+    await WebBrowser.openBrowserAsync(ad.clickUrl);
+  }, []);
 
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -155,20 +163,24 @@ export function StorylinesScreen() {
               tintColor={colors.accent}
             />
           }>
-          {items.map((item, i) => (
+          {listItems.map((entry, i) => (
             <Animated.View
-              key={item.threadId}
+              key={entry.kind === 'ad' ? `ad:${entry.ad.adId}` : entry.thread.threadId}
               layout={LinearTransition.duration(motion.duration.fast)}
               entering={FadeInDown.delay(Math.min(i, 8) * 45).duration(motion.duration.base)}>
-              <StorylineCard
-                item={item}
-                onPress={() =>
-                  router.push({
-                    pathname: '/(tabs)/storyline/[id]',
-                    params: { id: item.threadId },
-                  })
-                }
-              />
+              {entry.kind === 'ad' ? (
+                <StorylineAdCard ad={entry.ad} onPress={() => void onAdPress(entry.ad)} />
+              ) : (
+                <StorylineCard
+                  item={entry.thread}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(tabs)/storyline/[id]',
+                      params: { id: entry.thread.threadId },
+                    })
+                  }
+                />
+              )}
             </Animated.View>
           ))}
           {loadingMore ? (

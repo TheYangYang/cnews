@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="CNews.Api.Tests/CNews.Api.Tests.csproj" />
+  <Project Path="CNews.Api/CNews.Api.csproj" />
+  <Project Path="CNews.Application/CNews.Application.csproj" />
+  <Project Path="CNews.Domain/CNews.Domain.csproj" />
+  <Project Path="CNews.Infrastructure/CNews.Infrastructure.csproj" />
+</Solution>

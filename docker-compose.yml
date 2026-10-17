@@ -1,0 +1,73 @@
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - cnews_mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cnews
+      POSTGRES_PASSWORD: cnews
+      POSTGRES_DB: cnews
+    ports:
+      - "5432:5432"
+    volumes:
+      - cnews_postgres:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cnews -d cnews"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional local S3. If registry auth blocks MinIO pulls, skip these
+  # services; text APIs still work. Set PUBLISH audio later against real S3.
+  minio:
+    profiles: ["audio"]
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: cnewsminio
+      MINIO_ROOT_PASSWORD: cnewsminio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - cnews_minio:/data
+
+  createbuckets:
+    profiles: ["audio"]
+    image: minio/mc:RELEASE.2024-11-17T19-35-56Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 cnewsminio cnewsminio;
+      mc mb -p local/cnews-audio || true;
+      mc anonymous set none local/cnews-audio;
+      exit 0;
+      "
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  cnews_mongo:
+  cnews_postgres:
+  cnews_minio:

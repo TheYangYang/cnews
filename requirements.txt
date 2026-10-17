@@ -1,4 +1,0 @@
-httpx>=0.27
-feedparser>=6.0.11
-redis>=5.0
-fakeredis>=2.26

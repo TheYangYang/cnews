@@ -1,0 +1,11 @@
+httpx>=0.27
+feedparser>=6.0.11
+redis>=5.0
+fakeredis>=2.26
+pymongo>=4.10
+boto3>=1.35
+numpy>=1.26
+soundfile>=0.12
+torch>=2.2
+kokoro>=0.9
+# System deps: ffmpeg (Opus encode), espeak-ng (Kokoro phonemes), Python >=3.10

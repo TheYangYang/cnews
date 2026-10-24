@@ -122,6 +122,73 @@ Configured in:
 
 ---
 
+## Release builds (EAS)
+
+Profiles live in `mobile/eas.json`:
+
+| Profile | For | API | Crash reports |
+| --- | --- | --- | --- |
+| `development` | Dev client on your phone (background audio, lock screen) | LAN `http://` | Off |
+| `preview` | Internal testers (Android `.apk`, iOS ad hoc) | `https://` | On |
+| `production` | App Store / Play Store; build number auto-increments | `https://` | On |
+
+Release builds block plain `http://`, so `preview` / `production` need the API (and the
+media / audio URLs from `PUBLIC_BASE_URL`) on a public HTTPS domain. Replace the
+placeholder `https://api.cracknews.ca` in `eas.json` with the real one.
+
+One-time setup:
+
+```bash
+cd mobile
+npx eas-cli@latest login
+npx eas-cli@latest init                 # links the project, writes extra.eas.projectId to app.json
+npx eas-cli@latest build:version:set    # only if a build is already in a store
+# Crash reporting (sentry.io → project → Client Keys / Auth Tokens):
+npx eas-cli@latest env:set --name EXPO_PUBLIC_SENTRY_DSN --value <dsn> --environment production --visibility plaintext
+npx eas-cli@latest env:set --name EXPO_PUBLIC_SENTRY_DSN --value <dsn> --environment preview --visibility plaintext
+```
+
+Add `SENTRY_AUTH_TOKEN` (source map upload) in the Expo dashboard → project →
+Environment variables, visibility **Secret**, for `preview` and `production`.
+
+Set `SENTRY_ORG` / `SENTRY_PROJECT` in `eas.json` to your Sentry slugs. Signing keys:
+the first `eas build` offers to generate and store them (Android keystore, iOS
+certificates); keep them EAS-managed.
+
+```bash
+npx eas-cli@latest build --profile preview --platform android
+npx eas-cli@latest build --profile production --platform all
+npx eas-cli@latest submit --profile production --platform ios   # or android
+```
+
+### Ads (Google AdMob, non-personalized)
+
+Home and Storylines ad slots show Google **native** ads drawn like the app's cards
+(`src/features/ads/`). Rules baked in: non-personalized requests only, so there is
+**no tracking prompt** (no `NSUserTrackingUsageDescription`); never in Play; a slot only
+appears once an ad has loaded; first-party ads from `/v1/ads/display` win when present.
+Expo Go and web skip ads entirely. Dev and preview builds always show Google test ads.
+
+For real ads (no bank card needed until payout, ~$100):
+
+1. admob.google.com → add the app (iOS, and Android if released) → create a **Native
+   advanced** ad unit for each.
+2. In `mobile/eas.json` → `production.env`, fill `ADMOB_IOS_APP_ID` /
+   `ADMOB_ANDROID_APP_ID` (App IDs, `ca-app-pub-…~…`) and `EXPO_PUBLIC_ADMOB_NATIVE_IOS` /
+   `EXPO_PUBLIC_ADMOB_NATIVE_ANDROID` (ad unit IDs, `ca-app-pub-…/…`). Empty = test ads.
+3. Release in **Canada only** (App Store Connect → Pricing and Availability) unless you
+   add Google's consent form for the EEA/UK.
+4. App Privacy: Data Not Linked to You → Location (coarse), Identifiers (Device ID),
+   Usage Data (Advertising Data), Diagnostics; Tracking: **No**. Privacy policy: say the
+   app shows non-personalized Google AdMob ads and Google may collect device data
+   (e.g. IP address) to deliver and measure them.
+5. Optional, for full demand: publish `app-ads.txt` on your developer website.
+
+Don't run `scripts/seed_demo_ads.py` against production: its demo ads use real brands.
+
+`app.json` `version` is the user-facing version (bump it per release); build numbers
+are managed remotely by EAS.
+
 ## Common workflows
 
 ### Add a feed story (seed)

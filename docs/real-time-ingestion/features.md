@@ -12,7 +12,8 @@ Product features for the real-time ingestion system and the mobile experience it
 - Deduplicate by URL per feed; link the same URL across feeds without re-summarizing.
 - Cap new articles per poll so the local model does not fall behind.
 - Topics: `Top`, `Canada`, `Local`, `World`, `Politics`, `Business`, `Health`, `Arts`, `Technology`, `Sports`.
-- Places: province or city labels for local filtering later.
+- Places: province or city labels on each Local story (not GPS). Catalog covers major CMAs plus provincial desks so smaller cities still get nearby news.
+- English-only RSS: Kokoro has no French voice (no Radio-Canada / La Presse / TVA / Journal). Montreal still has CBC, Global, and CityNews in English.
 
 **Done when.** A new CBC/Global headline shows a stored article row (working store) after the next eligible poll, without duplicate briefs for the same URL.
 

@@ -270,6 +270,14 @@ Aliases: `/v1/threads` deprecated synonyms OK during migration.
 
 **200** `{ "status": "ok" }`
 
+### `GET /v1/health/ingest`
+
+For an uptime monitor. Reads the heartbeat the ingest box writes to Mongo `ingest_status` every minute.
+
+**200** `{ "status": "ok", "problem": null, "lastSeenAt": "…", "lastBriefAt": "…", "backlog": 0, "host": "…", "ttsStatus": "…" }`
+
+**503** same shape, `status: "down"`, `problem` one of: `ingest has never checked in`, `ingest box stopped checking in` (no heartbeat for `INGEST_STALE_MINUTES`, default 15), `ingest is up but no new briefs` (none for `INGEST_BRIEF_STALE_MINUTES`, default 180).
+
 ---
 
 ## Headers

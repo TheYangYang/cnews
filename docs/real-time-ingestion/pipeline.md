@@ -65,21 +65,26 @@ The AI worker:
 
 **Rule:** Never start Kokoro for an article that has no brief.
 
-### 3. GPU rest gate (before Kokoro)
+### 3. GPU scheduling (before Kokoro)
 
-Kokoro and Ollama both want GPU/accelerator time. Contended inference causes timeouts and garbled audio.
+Ollama and Kokoro share one GPU. On a small card (GTX 1060, 6 GB) an 8B model and Kokoro do not fit together, and contended inference causes timeouts and garbled audio. `tts/gpu_gate.py` makes them **take turns**.
 
-**Gate policy (v1):**
+**Priority:** brief for every new article → speech → enrichment (storyline decisions, multi-outlet framing).
 
-| Check | Pass if |
+| Rule | Behavior |
 | --- | --- |
-| Brief exists | `summary` non-empty |
-| Ollama idle | No in-flight chat requests from this process (and optional `/api/ps` empty) |
-| Kokoro idle | No active synthesis job |
-| Optional VRAM | Free memory above a configured threshold when `nvidia-smi` / Metal stats are available |
-| Backoff | If busy, sleep 2–15s with jitter and re-check; do not ack the TTS message until success or permanent skip |
+| Brief exists | Speech is only queued after `summary` is saved |
+| LLM first | Ollama calls run whenever no speech turn is open |
+| Speech turn starts | LLM quiet for `TTS_IDLE_GRACE_SECONDS` (4s), so a burst of articles is briefed first |
+| Starvation guard | A brief that waited `TTS_MAX_LAG_SECONDS` (240s) forces a turn; new LLM calls queue behind it |
+| Batching | A turn speaks at least `TTS_TURN_MIN` (4) briefs before yielding to new articles (`TTS_TURN_MAX` when forced), so one model swap covers several briefs |
+| Model swap | With `GPU_SWAP_MODELS`, a turn unloads Ollama (`keep_alive: 0`), moves Kokoro to CUDA, and parks Kokoro on CPU when the turn ends |
+| Enrichment | Runs when articles and speech are idle, and at least every `ENRICH_MAX_LAG_SECONDS` under load. Framing is debounced per cluster |
+| Backpressure | The poller pauses intake while `ARTICLE_BACKLOG_MAX` (40) recent articles wait for a brief |
+| Kokoro on CPU | `TTS_DEVICE=cpu` (or no CUDA): speech never waits on the LLM |
+| CUDA failure | First failed GPU render (e.g. torch built without `sm_61`) switches Kokoro to CPU for the run |
 
-Only one Kokoro job runs at a time on a host. Ollama brief/framing/thread work has priority over starting new TTS jobs.
+Jobs are acked only after they finish. On restart each worker drains its unacked Redis entries first (`read_pending`); with the in-process broker, recent briefs without audio are requeued from SQLite.
 
 ### 4. Synthesize Opus
 
@@ -126,23 +131,36 @@ Publish framing/thread docs independently of audio readiness.
 | MongoDB | Published stories, compare, threads | Lambda API |
 | S3 | Opus bytes | App via signed URL |
 
+Retention (hourly, `realtime_ingestion/maintenance.py`):
+
+- **Working store:** article text is dropped once briefed; local audio once S3 has it (failed uploads stay as `upload_failed` and are retried every 10 min). Rows stay 7 days for dedupe (RSS feeds re-list items for days), then go.
+- **Published store:** a story is removed from MongoDB and S3 **14 days** after publishing unless a live storyline lists it. Storylines auto-close after **7 days** without an update and are removed, with their stories, **30 days** after closing. S3 is deleted first, then Mongo.
+- **Storyline docs are merged, not replaced:** each publish upserts entries by `storyId`, so Mongo keeps entries the ingest box has already pruned. When a story's audio lands, its storyline entry is marked `ready` too.
+
 Migration note: until Mongo publish is implemented, the local reader continues to read SQLite. After publish lands, the mobile app must not depend on SQLite.
 
-## Configuration (planned env)
+## Configuration
+
+Read from the environment, then the repo-root `.env` (`CNEWS_ENV_FILE` overrides the path). Full list with defaults: `realtime_ingestion/config.py` and `.env.example`.
 
 | Variable | Purpose |
 | --- | --- |
 | `OLLAMA_URL` | Default `http://127.0.0.1:11434` |
 | `OLLAMA_MODEL` | Default `llama3.1:8b` |
+| `OLLAMA_NUM_CTX` | Default `3072`; sent on every call so Ollama never reloads between calls |
+| `OLLAMA_KEEP_ALIVE` | Default `30m` |
 | `KOKORO_VOICE` | e.g. `af_heart` |
 | `TTS_ENABLED` | `true` / `false` |
+| `TTS_DEVICE` | `auto` / `cuda` / `cpu` |
 | `GPU_GATE_ENABLED` | Default `true` |
+| `GPU_SWAP_MODELS` | Default `true` (single small GPU) |
 | `MONGODB_URI` | Publish target |
 | `S3_ENDPOINT` | AWS or MinIO URL |
 | `S3_BUCKET` | Audio bucket |
 | `S3_PREFIX` | e.g. `audio/opus/` |
 | `REDIS_URL` | Stream broker |
 | `PUBLISH_REQUIRE_AUDIO` | If `true`, hide from listen APIs until Opus ready |
+| `CNEWS_DATA_DIR` | Working store + audio dir (default `./data`) |
 
 ## Observability
 
@@ -155,8 +173,8 @@ The temporary reader can keep showing these for developers. Mobile users never s
 ## Acceptance checklist
 
 - [ ] `ollama pull llama3.1:8b` documented and verified on a clean machine.
-- [ ] Brief always precedes TTS enqueue.
-- [ ] Busy GPU delays TTS without dropping the brief.
+- [x] Brief always precedes TTS enqueue.
+- [x] Busy GPU delays TTS without dropping the brief (`realtime_ingestion/tests`).
 - [ ] Opus lands in S3; MongoDB references the key.
 - [ ] Text-only path works when TTS is off.
 - [ ] Coverage pager data and Storylines update without waiting on audio.

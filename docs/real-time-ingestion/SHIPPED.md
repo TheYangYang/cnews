@@ -1,6 +1,6 @@
 # Shipped status — CrackNews
 
-Living record of what is **actually built and working** as of **2026-10-17**.  
+Living record of what is **actually built and working** as of **2026-10-24**.  
 Specs that still describe aspirational UX are called out under **Deferred**.
 
 Brand: **CrackNews** (Expo app name; package `ca.cracknews.app`).
@@ -25,9 +25,11 @@ Brand: **CrackNews** (Expo app name; package `ca.cracknews.app`).
 
 ### Ingest & publish
 
-- Continuous RSS poll with topic catalog and dedupe.
+- Continuous RSS poll with topic catalog and dedupe. Local desks cover major cities **and** provinces (no GPS); Home `Local` mixes those places.
 - Briefs via Ollama `llama3.1:8b` with extractive fallback.
-- GPU rest gate before Kokoro TTS; Opus via ffmpeg when available (WAV/m4a fallbacks).
+- Single-GPU scheduling: briefs first, then batched Kokoro turns (Ollama unloaded during a turn), then storylines/framing. Starvation guard, intake backpressure, CPU fallback. Opus via ffmpeg when available (WAV/m4a fallbacks).
+- Crash-safe queues: jobs ack after they finish; unacked Redis entries are recovered on restart. Workers restart on crash; SIGTERM drains.
+- Text re-publish never clears attached audio (`listenReady` / `audioKey` stay set).
 - Publish to Mongo (`stories`, `threads`/`storylines`, `compares`) with audio keys/status.
 - Demo seed: `scripts/seed_demo_mongo.py`, `scripts/seed_demo_ads.py`, Kokoro / demo brief generators.
 - Ops HTML reader on `:8765` for pipeline debugging only.
@@ -83,7 +85,8 @@ Guest browse of feed/storylines without JWT is allowed.
 - Play is **scoped to the focused page**: Home wall vs Storylines.
 - Switching tabs / leaving a play surface **stops** audio (no cross-page resume of the wrong queue).
 - Pause/resume only if the active `playerStore.context` matches the current surface.
-- **Background / lock-screen playback** (Spotify-style): `shouldPlayInBackground`, lock-screen metadata, `expo-audio` `enableBackgroundPlayback` — requires a **native rebuild** (not Expo Go alone).
+- **Background / lock-screen playback** (Spotify-style): one `AudioPlayer` with `setActiveForLockScreen` (title · outlet · artwork), `shouldPlayInBackground`, `expo-audio` `enableBackgroundPlayback` — requires a **native rebuild** (not Expo Go alone). Lock-screen play/pause stays in sync with the Play button.
+- Audio URLs resolve just in time (next one prefetched); a stale signed URL is refetched once, then the brief is skipped.
 - Long-press Play → hard stop.
 
 ### Mobile — Search
@@ -126,7 +129,8 @@ Guest browse of feed/storylines without JWT is allowed.
 | `mobile/src/data/stores/playerStore.ts` | Queue, expo-audio, lock screen |
 | `mobile/src/data/stores/playSurfaceStore.ts` | `home` \| `storylines` \| `search` ownership |
 | `mobile/src/shared/hooks/useSearch.ts` | Debounced `/v1/search` + cache |
-| `mobile/src/shared/hooks/useFeed.ts` | Home cursor + shuffle refresh |
+| `mobile/src/data/stores/feedStore.ts` | Shared Home feed (wall, reader pager, and Play read the same pages) |
+| `mobile/src/shared/hooks/useFeed.ts` | Home cursor + shuffle refresh (thin hook over `feedStore`) |
 | `mobile/src/shared/hooks/useStorylines.ts` | Storylines cursor + shuffle refresh |
 
 ---
@@ -162,3 +166,5 @@ Guest browse of feed/storylines without JWT is allowed.
 | 2026-10-17 | Voice-first: Home always `mode=listen`; Settings topics only |
 | 2026-10-17 | Pull-to-refresh while Play: keep current brief, rebind remaining queue |
 | 2026-10-17 | Search tab + `GET /v1/search`; Login hidden from the tab bar |
+| 2026-10-24 | Ingest host = one GTX 1060: Ollama and Kokoro take GPU turns (see pipeline.md) |
+| 2026-10-24 | Offline mock data is dev-only; production shows real errors / cache |

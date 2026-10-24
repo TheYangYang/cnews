@@ -14,7 +14,23 @@ builder.WebHost.UseUrls(builder.Configuration["ASPNETCORE_URLS"] ?? "http://0.0.
 builder.Services.AddCNewsInfrastructure(builder.Configuration);
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
-var jwtKey = builder.Configuration["JWT_SIGNING_KEY"] ?? "dev-only-change-me-to-a-long-random-secret";
+var jwtKey = builder.Configuration["JWT_SIGNING_KEY"];
+if (builder.Environment.IsDevelopment())
+{
+    jwtKey ??= "dev-only-change-me-to-a-long-random-secret";
+}
+else
+{
+    // Fail at startup instead of serving forgeable tokens or a localhost database.
+    if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32 || jwtKey.StartsWith("dev-only"))
+    {
+        throw new InvalidOperationException("JWT_SIGNING_KEY must be set to a random secret of 32+ characters.");
+    }
+    if (string.IsNullOrWhiteSpace(builder.Configuration["MONGODB_URI"]))
+    {
+        throw new InvalidOperationException("MONGODB_URI must be set.");
+    }
+}
 var jwtIssuer = builder.Configuration["JWT_ISSUER"] ?? "cnews";
 var jwtAudience = builder.Configuration["JWT_AUDIENCE"] ?? "cnews-mobile";
 

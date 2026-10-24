@@ -42,13 +42,16 @@ public static class DependencyInjection
         services.Configure<GoogleAuthOptions>(o =>
         {
             o.ClientIds = config["GOOGLE_CLIENT_IDS"] ?? o.ClientIds;
-            o.AllowDevBypass = !string.Equals(config["ASPNETCORE_ENVIRONMENT"], "Production", StringComparison.OrdinalIgnoreCase);
+            // Only an explicit Development environment may accept "dev:<email>" tokens.
+            // (Lambda sets no environment, which must count as production.)
+            o.AllowDevBypass = string.Equals(config["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase);
         });
 
         services.AddSingleton<IStoryRepository, MongoStoryRepository>();
         services.AddSingleton<ICoverageRepository, MongoCoverageRepository>();
         services.AddSingleton<IStorylineRepository, MongoStorylineRepository>();
         services.AddSingleton<IDisplayAdRepository, MongoDisplayAdRepository>();
+        services.AddSingleton<IIngestStatusRepository, MongoIngestStatusRepository>();
         services.AddSingleton<IUserRepository, PostgresUserRepository>();
         services.AddSingleton<IAudioUrlService, S3AudioUrlService>();
         services.AddSingleton<IJwtTokenService, JwtTokenService>();

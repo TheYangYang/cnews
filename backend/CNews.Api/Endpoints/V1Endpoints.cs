@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using CNews.Application.Abstractions;
 using CNews.Application.DTOs;
 using CNews.Application.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,37 @@ public static class V1Endpoints
         var v1 = app.MapGroup("/v1");
 
         v1.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+        // For an uptime monitor: 503 when the ingest box stopped checking in, or stopped
+        // producing briefs. Separate from /health so the API itself never looks down.
+        v1.MapGet("/health/ingest", async (
+            IIngestStatusRepository status,
+            IConfiguration config,
+            CancellationToken ct) =>
+        {
+            var staleAfter = TimeSpan.FromMinutes(int.TryParse(config["INGEST_STALE_MINUTES"], out var m) ? m : 15);
+            var briefStaleAfter = TimeSpan.FromMinutes(int.TryParse(config["INGEST_BRIEF_STALE_MINUTES"], out var b) ? b : 180);
+            var now = DateTimeOffset.UtcNow;
+            var current = await status.GetAsync(ct);
+            string? problem = current is null
+                ? "ingest has never checked in"
+                : now - current.LastSeenAt > staleAfter
+                    ? "ingest box stopped checking in"
+                    : current.LastBriefAt is null || now - current.LastBriefAt > briefStaleAfter
+                        ? "ingest is up but no new briefs"
+                        : null;
+            var body = new
+            {
+                status = problem is null ? "ok" : "down",
+                problem,
+                lastSeenAt = current?.LastSeenAt,
+                lastBriefAt = current?.LastBriefAt,
+                backlog = current?.Backlog,
+                host = current?.Host,
+                ttsStatus = current?.TtsStatus,
+            };
+            return problem is null ? Results.Ok(body) : Results.Json(body, statusCode: StatusCodes.Status503ServiceUnavailable);
+        });
 
         v1.MapGet("/ads/display", async (
             DisplayAdService ads,

@@ -66,6 +66,11 @@ public interface IGoogleTokenValidator
 
 public sealed record GoogleIdentity(string Subject, string Email, string Name, string? Picture);
 
+public interface IIngestStatusRepository
+{
+    Task<IngestStatus?> GetAsync(CancellationToken ct);
+}
+
 public interface IJwtTokenService
 {
     (string Token, DateTimeOffset ExpiresAt) Issue(UserAccount user);

@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  CrackNews API on Lambda (container image) behind an HTTPS HTTP API, plus the
+  private S3 bucket for brief audio and an IAM policy for the ingest box.
+
+  Deploy (from backend/):  sam build && sam deploy --guided
+  See backend/README.md "Deploy to AWS".
+
+Parameters:
+  AudioBucketName:
+    Type: String
+    Description: Globally unique S3 bucket name for Opus audio (e.g. cracknews-audio-<something>).
+  MongoUri:
+    Type: String
+    NoEcho: true
+    Description: MongoDB Atlas connection string (mongodb+srv://...).
+  MongoDatabase:
+    Type: String
+    Default: cnews
+  JwtSigningKey:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: Random secret, 32+ characters (openssl rand -hex 32).
+  AudioUrlTtlSeconds:
+    Type: Number
+    Default: 900
+  IngestStaleMinutes:
+    Type: Number
+    Default: 15
+    Description: /v1/health/ingest returns 503 when the ingest box has not checked in for this long.
+  ThrottleRatePerSecond:
+    Type: Number
+    Default: 50
+  ThrottleBurst:
+    Type: Number
+    Default: 100
+
+Globals:
+  Function:
+    Timeout: 15
+    MemorySize: 1024
+    Architectures:
+      - arm64 # matches an Apple-silicon build machine; cheaper than x86_64
+
+Resources:
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref AudioBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ThrottleRatePerSecond
+        ThrottlingBurstLimit: !Ref ThrottleBurst
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Environment:
+        Variables:
+          ASPNETCORE_ENVIRONMENT: Production
+          MONGODB_URI: !Ref MongoUri
+          MONGODB_DATABASE: !Ref MongoDatabase
+          S3_BUCKET: !Ref AudioBucket
+          S3_REGION: !Ref AWS::Region
+          AUDIO_URL_TTL_SECONDS: !Ref AudioUrlTtlSeconds
+          JWT_SIGNING_KEY: !Ref JwtSigningKey
+          INGEST_STALE_MINUTES: !Ref IngestStaleMinutes
+      # Signing audio URLs needs read access; credentials come from this role.
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref AudioBucket
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+    Metadata:
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: latest
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ApiFunction}
+      RetentionInDays: 30
+
+  # Attach to the IAM user whose keys go in the ingest box's .env (S3_ACCESS_KEY/S3_SECRET_KEY).
+  IngestPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: CrackNews ingest box - upload and prune brief audio.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub ${AudioBucket.Arn}/*
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+            Resource: !GetAtt AudioBucket.Arn
+
+Outputs:
+  ApiUrl:
+    Description: Put this in mobile/eas.json as EXPO_PUBLIC_API_BASE_URL (preview + production).
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  IngestHealthUrl:
+    Description: Point an uptime monitor here; 503 means the ingest box stopped.
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/v1/health/ingest
+  AudioBucket:
+    Value: !Ref AudioBucket
+  IngestPolicyArn:
+    Description: Attach to the ingest box's IAM user.
+    Value: !Ref IngestPolicy

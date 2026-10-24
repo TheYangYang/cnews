@@ -9,13 +9,15 @@ public sealed class S3Options
 {
     public string Bucket { get; set; } = "cnews-audio";
     public string Region { get; set; } = "ca-central-1";
-    public string? Endpoint { get; set; } = "http://127.0.0.1:9000";
-    public string? AccessKey { get; set; } = "cnewsminio";
-    public string? SecretKey { get; set; } = "cnewsminio";
-    public bool ForcePathStyle { get; set; } = true;
+    /// <summary>Empty = real AWS S3. Set for MinIO in Development (appsettings.Development.json).</summary>
+    public string? Endpoint { get; set; }
+    /// <summary>Empty = the Lambda execution role's credentials (recommended in AWS).</summary>
+    public string? AccessKey { get; set; }
+    public string? SecretKey { get; set; }
+    public bool ForcePathStyle { get; set; }
     public int UrlTtlSeconds { get; set; } = 900;
     /// <summary>Used for local/media keys like local/demo-brief.mp3.</summary>
-    public string? PublicBaseUrl { get; set; } = "http://127.0.0.1:5080";
+    public string? PublicBaseUrl { get; set; }
 }
 
 public sealed class S3AudioUrlService : IAudioUrlService, IDisposable

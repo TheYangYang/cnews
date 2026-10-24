@@ -3,10 +3,21 @@
 
 from __future__ import annotations
 
+import sys
+from urllib.parse import urlparse
+
 from pymongo import MongoClient
 
 URI = "mongodb://127.0.0.1:27017"
 DB = "cnews"
+
+
+def _require_local(uri: str) -> None:
+    """Demo data (real-brand ads, fake stories) must never reach a shared database."""
+    host = urlparse(uri).hostname
+    if uri.startswith("mongodb+srv://") or host not in {"127.0.0.1", "localhost", "::1"}:
+        sys.exit(f"Refusing to seed demo data into a non-local MongoDB ({host}).")
+
 
 ADS = [
     {
@@ -46,6 +57,7 @@ ADS = [
 
 
 def main() -> None:
+    _require_local(URI)
     client = MongoClient(URI, serverSelectionTimeoutMS=5000)
     db = client[DB]
     for ad in ADS:

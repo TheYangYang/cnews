@@ -14,11 +14,15 @@ import redis.asyncio as aioredis
 import fakeredis.aioredis
 from redis.exceptions import ResponseError
 
+from realtime_ingestion import config
+
 
 class RedisBroker:
-    def __init__(self, client: aioredis.Redis, label: str) -> None:
+    def __init__(self, client: aioredis.Redis, label: str, *, durable: bool = True) -> None:
         self.redis = client
         self.label = label
+        # False for the in-process fallback: its streams vanish when the process exits.
+        self.durable = durable
 
     async def ensure_group(self, stream: str, group: str) -> None:
         try:
@@ -28,7 +32,9 @@ class RedisBroker:
                 raise
 
     async def publish(self, stream: str, fields: dict[str, str]) -> str:
-        message_id = await self.redis.xadd(stream, fields)
+        message_id = await self.redis.xadd(
+            stream, fields, maxlen=config.STREAM_MAXLEN, approximate=True
+        )
         return str(message_id)
 
     async def read(
@@ -48,17 +54,28 @@ class RedisBroker:
             count=count,
             block=block_ms,
         )
-        messages: list[tuple[str, dict[str, str]]] = []
-        for item in raw or []:
-            entries = item[1]
-            for message_id, fields in entries:
-                messages.append(
-                    (str(message_id), {str(key): str(value) for key, value in fields.items()})
-                )
+        messages = _entries(raw)
         # The in-process server returns immediately when a stream is empty.
         # Sleep out the requested block so socket work on the loop can run.
         if not messages and (time.monotonic() - started) < (block_ms / 1000) / 2:
             await asyncio.sleep(block_ms / 1000)
+        return messages
+
+    async def read_pending(
+        self, stream: str, group: str, consumer: str, *, count: int = 100
+    ) -> list[tuple[str, dict[str, str]]]:
+        """Messages this consumer received but never acked (crash or shutdown mid-job).
+
+        A ">" read never returns these again, so workers drain them on startup.
+        """
+        raw = await self.redis.xreadgroup(group, consumer, {stream: "0"}, count=count)
+        # Entries trimmed from the stream come back with no fields; ack them away.
+        messages = []
+        for message_id, fields in _entries(raw):
+            if fields:
+                messages.append((message_id, fields))
+            else:
+                await self.ack(stream, group, message_id)
         return messages
 
     async def ack(self, stream: str, group: str, message_id: str) -> None:
@@ -78,6 +95,24 @@ class RedisBroker:
         await self.redis.aclose()
 
 
+def _entries(raw) -> list[tuple[str, dict[str, str]]]:
+    messages: list[tuple[str, dict[str, str]]] = []
+    for item in raw or []:
+        for message_id, fields in item[1]:
+            messages.append(
+                (str(message_id), {str(key): str(value) for key, value in (fields or {}).items()})
+            )
+    return messages
+
+
+def enqueued_at(message_id: str) -> float:
+    """Wall-clock seconds when Redis accepted the message (ids are '<ms>-<seq>')."""
+    try:
+        return int(message_id.split("-", 1)[0]) / 1000
+    except ValueError:
+        return time.time()
+
+
 async def open_broker(url: str) -> RedisBroker:
     probe = aioredis.from_url(
         url,
@@ -93,7 +128,9 @@ async def open_broker(url: str) -> RedisBroker:
         except Exception:
             pass
         fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
-        return RedisBroker(fake, "in-process Redis Streams (Redis server not running)")
+        return RedisBroker(
+            fake, "in-process Redis Streams (Redis server not running)", durable=False
+        )
     await probe.aclose()
     client = aioredis.from_url(url, decode_responses=True)
     return RedisBroker(client, "Redis Streams")

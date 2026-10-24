@@ -250,30 +250,58 @@ async def poll_feed(
         db.add_event("poller", f"{feed['name']}: {note}")
 
 
+async def _poll_safely(
+    feed: dict,
+    client: httpx.AsyncClient,
+    db: Database,
+    broker: RedisBroker,
+    slots: asyncio.Semaphore,
+) -> None:
+    async with slots:
+        try:
+            await poll_feed(feed, client, db, broker)
+        except Exception as exc:
+            db.mark_fetch(
+                feed["id"],
+                status=None,
+                etag=feed.get("etag"),
+                last_modified=feed.get("last_modified"),
+                body_hash=None,
+                note=f"fetch failed: {exc}",
+                new_count=0,
+                duplicate_count=0,
+            )
+            db.add_event("poller", f"fetch failed: {exc}")
+
+
 async def run_poller(db: Database, broker: RedisBroker, stop: asyncio.Event) -> None:
     await _republish_pending(db, broker)
     timeout = httpx.Timeout(25.0, connect=10.0)
+    slots = asyncio.Semaphore(config.FEED_POLL_CONCURRENCY)
+    throttled = False
     async with httpx.AsyncClient(
         timeout=timeout,
         follow_redirects=True,
         headers=FEED_HEADERS,
     ) as client:
         while not stop.is_set():
-            for feed in db.due_feeds():
-                try:
-                    await poll_feed(feed, client, db, broker)
-                except Exception as exc:
-                    db.mark_fetch(
-                        feed["id"],
-                        status=None,
-                        etag=feed.get("etag"),
-                        last_modified=feed.get("last_modified"),
-                        body_hash=None,
-                        note=f"fetch failed: {exc}",
-                        new_count=0,
-                        duplicate_count=0,
+            # Backpressure: when briefs fall behind, stop taking new articles until the
+            # GPU catches up. Feeds stay due, so nothing is skipped that the feed still lists.
+            backlog = db.unsummarized_count()
+            limit = config.ARTICLE_BACKLOG_MAX
+            if limit and backlog >= limit:
+                if not throttled:
+                    db.add_event("poller", f"paused: {backlog} articles waiting for a brief")
+                    throttled = True
+            else:
+                if throttled:
+                    db.add_event("poller", f"resumed: backlog down to {backlog}")
+                    throttled = False
+                due = db.due_feeds()
+                if due:
+                    await asyncio.gather(
+                        *(_poll_safely(feed, client, db, broker, slots) for feed in due)
                     )
-                    db.add_event("poller", f"fetch failed: {exc}")
             try:
                 await asyncio.wait_for(stop.wait(), timeout=2)
             except TimeoutError:

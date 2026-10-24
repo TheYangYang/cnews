@@ -7,7 +7,7 @@ import re
 
 import httpx
 
-from realtime_ingestion import config
+from realtime_ingestion import llm
 
 Report = dict[str, str]
 Note = dict[str, str]
@@ -81,25 +81,11 @@ def _prompt(reports: list[Report]) -> str:
 
 async def write_notes(client: httpx.AsyncClient, reports: list[Report]) -> list[Note] | None:
     outlets = [report["outlet"] for report in reports]
-    response = await client.post(
-        f"{config.OLLAMA_URL}/api/chat",
-        json={
-            "model": config.OLLAMA_MODEL,
-            "stream": False,
-            "keep_alive": "10m",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You describe differences in news framing. "
-                        "Use plain sentences. Do not use markdown."
-                    ),
-                },
-                {"role": "user", "content": _prompt(reports)},
-            ],
-            "options": {"temperature": 0.2, "num_predict": 220},
-        },
+    content = await llm.chat(
+        client,
+        system="You describe differences in news framing. Use plain sentences. Do not use markdown.",
+        user=_prompt(reports),
+        temperature=0.2,
+        num_predict=220,
     )
-    response.raise_for_status()
-    content = response.json()["message"]["content"]
     return parse_notes(content, outlets)

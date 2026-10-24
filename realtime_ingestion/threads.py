@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from realtime_ingestion import config
+from realtime_ingestion import llm
 
 Decision = dict[str, Any]
 _PLACEHOLDERS = {"short title", "what is still unknown", "what is newly known", "unknown", "still unknown"}
@@ -106,22 +106,11 @@ async def decide(
     summary: str,
     open_threads: list[dict[str, str]],
 ) -> Decision | None:
-    response = await client.post(
-        f"{config.OLLAMA_URL}/api/chat",
-        json={
-            "model": config.OLLAMA_MODEL,
-            "stream": False,
-            "keep_alive": "10m",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You decide whether a news brief starts, continues, or ends an unfinished situation. Use plain text.",
-                },
-                {"role": "user", "content": _prompt(title, summary, open_threads)},
-            ],
-            "options": {"temperature": 0.1, "num_predict": 80},
-        },
+    content = await llm.chat(
+        client,
+        system="You decide whether a news brief starts, continues, or ends an unfinished situation. Use plain text.",
+        user=_prompt(title, summary, open_threads),
+        temperature=0.1,
+        num_predict=80,
     )
-    response.raise_for_status()
-    content = response.json()["message"]["content"]
     return parse_decision(content, open_threads)

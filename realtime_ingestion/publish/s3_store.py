@@ -54,5 +54,18 @@ class S3Store:
         )
         return full_key
 
+    def delete_keys(self, keys: list[str]) -> None:
+        """Delete full object keys (as stored in Mongo). Raises if S3 reports any failure,
+        so the caller keeps the Mongo docs and retries next round."""
+        for start in range(0, len(keys), 1000):
+            chunk = keys[start : start + 1000]
+            response = self._client.delete_objects(
+                Bucket=self.bucket,
+                Delete={"Objects": [{"Key": key} for key in chunk], "Quiet": True},
+            )
+            errors = response.get("Errors") or []
+            if errors:
+                raise RuntimeError(f"S3 delete failed for {len(errors)} objects: {errors[0]}")
+
     def audio_key_for(self, story_id: str, when: datetime, ext: str = "opus") -> str:
         return f"{when.year:04d}/{when.month:02d}/{when.day:02d}/{story_id}.{ext}"

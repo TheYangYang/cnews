@@ -667,7 +667,7 @@ def snapshot(db_path: Path) -> dict:
                     "summary": row["summary"],
                     "summary_words": row["summary_words"],
                     "summary_engine": row["summary_engine"],
-                    "excerpt": _excerpt(row["clean_text"] or row["raw_text"] or ""),
+                    "excerpt": _excerpt(row["clean_text"] or row["raw_text"] or row["summary"] or ""),
                     "audio_url": f"/audio/{audio_name}" if audio_name else None,
                     "published_at": row["published_at"] or row["first_seen_at"],
                     "outlet": row["feed_outlet"] or row["outlet"] or "",
@@ -823,10 +823,12 @@ def _handler(db_path: Path, audio_dir: Path):
                 if path.startswith("/audio/"):
                     name = Path(path.removeprefix("/audio/")).name
                     file_path = audio_dir / name
-                    if file_path.suffix.lower() != ".wav" or not file_path.is_file():
+                    # ffmpeg writes Ogg Opus; WAV is the fallback when ffmpeg is missing.
+                    kind = {".wav": "audio/wav", ".opus": "audio/ogg"}.get(file_path.suffix.lower())
+                    if kind is None or not file_path.is_file():
                         self._send(404, b"missing audio", "text/plain; charset=utf-8")
                         return
-                    self._send(200, file_path.read_bytes(), "audio/wav")
+                    self._send(200, file_path.read_bytes(), kind)
                     return
                 self._send(404, b"not found", "text/plain; charset=utf-8")
             except Exception as exc:

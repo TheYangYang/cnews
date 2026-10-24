@@ -132,7 +132,8 @@ class Database:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
-        self.conn = sqlite3.connect(path)
+        # timeout: the publisher and the ops UI hold their own connections to this file.
+        self.conn = sqlite3.connect(path, timeout=10)
         self.conn.row_factory = sqlite3.Row
 
     def init(self) -> None:
@@ -141,6 +142,9 @@ class Database:
             self._add_column(table, column, typedef)
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_articles_cluster ON articles(cluster_id)"
+        )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_articles_summarized ON articles(summarized_at)"
         )
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA busy_timeout=5000")
@@ -512,11 +516,24 @@ class Database:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def unsummarized_count(self, *, window_hours: int = 6) -> int:
+        """Recent articles still waiting for a brief. Windowed so a row that failed for
+        good ages out instead of pausing intake forever."""
+        cutoff = iso(utcnow() - timedelta(hours=window_hours))
+        row = self.conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM articles
+            WHERE first_seen_at >= ?
+              AND summarized_at IS NULL AND (summary IS NULL OR summary = '')
+            """,
+            (cutoff,),
+        ).fetchone()
+        return int(row["n"])
+
     def save_summary(
         self,
         article_id: int,
         *,
-        clean_text: str,
         summary: str,
         summary_words: int,
         summary_engine: str,
@@ -524,14 +541,16 @@ class Database:
         self.conn.execute(
             """
             UPDATE articles SET
-                clean_text = ?,
+                clean_text = NULL,
+                raw_text = NULL,
                 summary = ?,
                 summary_words = ?,
                 summary_engine = ?,
                 summarized_at = ?
             WHERE id = ?
             """,
-            (clean_text, summary, summary_words, summary_engine, iso(), article_id),
+            # Full article text is only needed to write the brief; it is not kept.
+            (summary, summary_words, summary_engine, iso(), article_id),
         )
         self.conn.commit()
 
@@ -615,14 +634,16 @@ class Database:
         )
         self.conn.commit()
 
-    def open_threads(self) -> list[dict[str, str]]:
+    def open_threads(self, limit: int = -1) -> list[dict[str, str]]:
         rows = self.conn.execute(
             """
             SELECT id, title, open_question
             FROM threads
             WHERE status = 'open'
             ORDER BY updated_at DESC
-            """
+            LIMIT ?
+            """,
+            (limit,),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -640,19 +661,40 @@ class Database:
         )
         self.conn.commit()
 
-    def articles_awaiting_thread(self, limit: int = 12) -> list[dict[str, Any]]:
+    def articles_awaiting_thread(
+        self, limit: int = 12, *, window_hours: int = 48
+    ) -> list[dict[str, Any]]:
+        """Recent briefs not yet reviewed for storylines, oldest first so threads read in order."""
+        cutoff = iso(utcnow() - timedelta(hours=window_hours))
         rows = self.conn.execute(
             """
             SELECT id, title, summary, cluster_id
             FROM articles
-            WHERE summary IS NOT NULL AND summary != ''
+            WHERE summarized_at >= ?
+              AND summary IS NOT NULL AND summary != ''
               AND id NOT IN (SELECT article_id FROM thread_reviews)
-            ORDER BY summarized_at DESC
+            ORDER BY summarized_at ASC
             LIMIT ?
             """,
-            (limit,),
+            (cutoff, limit),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def articles_awaiting_audio(self, *, window_hours: int = 24) -> list[int]:
+        """Recent briefs with no audio yet (requeued on startup; the in-process broker forgets)."""
+        cutoff = iso(utcnow() - timedelta(hours=window_hours))
+        rows = self.conn.execute(
+            """
+            SELECT id FROM articles
+            WHERE summarized_at >= ?
+              AND summary IS NOT NULL AND summary != ''
+              AND audio_path IS NULL
+              AND (audio_status IS NULL OR audio_status = 'pending')
+            ORDER BY summarized_at ASC
+            """,
+            (cutoff,),
+        ).fetchall()
+        return [int(row["id"]) for row in rows]
 
     def drop_copied_thread_ids(self) -> int:
         """Remove threads whose title is another thread's id, not a situation."""
@@ -955,6 +997,7 @@ class Database:
                 article.audio_path AS audio_path,
                 article.audio_status AS audio_status,
                 article.image_url AS image_url,
+                article.url AS source_url,
                 update_row.note AS note,
                 update_row.created_at AS at
             FROM thread_updates AS update_row
@@ -988,10 +1031,117 @@ class Database:
                     "audioStatus": "ready" if row["audio_path"] else (row["audio_status"] or "pending"),
                     "audioKey": None,
                     "imageUrl": row["image_url"],
+                    "sourceUrl": row["source_url"],
                 }
                 for row in updates
             ],
         }
+
+    # ----- retention -----------------------------------------------------------------
+
+    def prune(self, *, keep_days: int, batch: int = 500) -> dict[str, Any]:
+        """Delete article rows older than ``keep_days``. Everything here is already in
+        MongoDB / S3; rows only stay this long so a URL an RSS feed still lists is not
+        briefed twice, and so new outlets can join recent story groups. Articles on an
+        open storyline are kept for thread matching. Returns counts plus the deleted
+        article ids (their local audio files can then be removed)."""
+        cutoff = iso(utcnow() - timedelta(days=keep_days))
+        deleted: list[int] = []
+        while True:
+            ids = [
+                int(row["id"])
+                for row in self.conn.execute(
+                    """
+                    SELECT id FROM articles
+                    WHERE first_seen_at < ?
+                      AND id NOT IN (
+                        SELECT update_row.article_id
+                        FROM thread_updates AS update_row
+                        JOIN threads ON threads.id = update_row.thread_id
+                        WHERE threads.status = 'open'
+                      )
+                    LIMIT ?
+                    """,
+                    (cutoff, batch),
+                ).fetchall()
+            ]
+            if not ids:
+                break
+            marks = ",".join("?" * len(ids))
+            for table, column in (
+                ("thread_updates", "article_id"),
+                ("thread_reviews", "article_id"),
+                ("article_feeds", "article_id"),
+                ("articles", "id"),
+            ):
+                self.conn.execute(f"DELETE FROM {table} WHERE {column} IN ({marks})", ids)
+            self.conn.commit()
+            deleted.extend(ids)
+        threads = self.conn.execute(
+            """
+            DELETE FROM threads
+            WHERE status != 'open'
+              AND COALESCE(closed_at, updated_at) < ?
+              AND id NOT IN (SELECT thread_id FROM thread_updates)
+            """,
+            (cutoff,),
+        ).rowcount
+        framings = self.conn.execute(
+            """
+            DELETE FROM framings
+            WHERE cluster_id NOT IN (
+              SELECT cluster_id FROM articles WHERE cluster_id IS NOT NULL
+            )
+            """
+        ).rowcount
+        # Rows briefed before text stopped being kept.
+        trimmed = self.conn.execute(
+            """
+            UPDATE articles SET raw_text = NULL, clean_text = NULL
+            WHERE summary IS NOT NULL AND summary != ''
+              AND (raw_text IS NOT NULL OR clean_text IS NOT NULL)
+            """
+        ).rowcount
+        self.conn.commit()
+        return {
+            "articles": len(deleted),
+            "threads": threads,
+            "framings": framings,
+            "text_trimmed": trimmed,
+            "deleted_ids": deleted,
+        }
+
+    def close_stale_threads(self, *, quiet_days: int) -> list[tuple[str, str]]:
+        """Close open storylines with no update for ``quiet_days``. Returns (id, closed_at)."""
+        cutoff = iso(utcnow() - timedelta(days=quiet_days))
+        now = iso()
+        rows = self.conn.execute(
+            "SELECT id FROM threads WHERE status = 'open' AND updated_at < ?", (cutoff,)
+        ).fetchall()
+        ids = [str(row["id"]) for row in rows]
+        for thread_id in ids:
+            self.conn.execute(
+                "UPDATE threads SET status = 'closed', closed_at = ?, updated_at = ? WHERE id = ?",
+                (now, now, thread_id),
+            )
+        self.conn.commit()
+        return [(thread_id, now) for thread_id in ids]
+
+    def audio_uploads_to_retry(self, *, window_hours: int = 48, limit: int = 20) -> list[dict[str, Any]]:
+        """Recent briefs whose audio rendered locally but never reached S3."""
+        cutoff = iso(utcnow() - timedelta(hours=window_hours))
+        rows = self.conn.execute(
+            """
+            SELECT * FROM articles
+            WHERE audio_status = 'upload_failed'
+              AND audio_path IS NOT NULL
+              AND summarized_at >= ?
+            ORDER BY summarized_at ASC
+            LIMIT ?
+            """,
+            (cutoff, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def add_event(self, stage: str, message: str) -> None:
         text = message.replace("\n", " ").strip()
@@ -1009,6 +1159,16 @@ class Database:
             """
         )
         self.conn.commit()
+
+    def heartbeat_stats(self) -> dict[str, Any]:
+        """What the ingest heartbeat reports: last brief time, backlog, speech status."""
+        last = self.conn.execute("SELECT MAX(summarized_at) AS t FROM articles").fetchone()["t"]
+        tts = self.conn.execute("SELECT value FROM runtime WHERE key = 'tts_status'").fetchone()
+        return {
+            "last_brief_at": last,
+            "backlog": self.unsummarized_count(),
+            "tts_status": tts["value"] if tts else None,
+        }
 
     def set_runtime(self, key: str, value: str) -> None:
         self.conn.execute(

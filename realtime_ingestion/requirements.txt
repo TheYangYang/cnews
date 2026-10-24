@@ -6,6 +6,6 @@ pymongo>=4.10
 boto3>=1.35
 numpy>=1.26
 soundfile>=0.12
-torch>=2.2
+torch>=2.2  # GTX 1060 (Pascal): the build must list sm_61 in torch.cuda.get_arch_list()
 kokoro>=0.9
 # System deps: ffmpeg (Opus encode), espeak-ng (Kokoro phonemes), Python >=3.10

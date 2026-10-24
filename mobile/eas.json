@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "env": {
+        "SENTRY_ORG": "cracknews",
+        "SENTRY_PROJECT": "cracknews-mobile",
+        "SENTRY_ALLOW_FAILURE": "true"
+      }
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_API_BASE_URL": "http://10.0.0.100:5080",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.cracknews.ca"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.cracknews.ca",
+        "ADMOB_IOS_APP_ID": "",
+        "ADMOB_ANDROID_APP_ID": "",
+        "EXPO_PUBLIC_ADMOB_NATIVE_IOS": "",
+        "EXPO_PUBLIC_ADMOB_NATIVE_ANDROID": ""
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

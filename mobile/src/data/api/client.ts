@@ -17,11 +17,14 @@ type RequestOptions = {
   body?: unknown;
   token?: string | null;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
+
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 export async function apiRequest<T>(
   path: string,
-  { method = 'GET', body, token, signal }: RequestOptions = {},
+  { method = 'GET', body, token, signal, timeoutMs = DEFAULT_TIMEOUT_MS }: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -34,16 +37,24 @@ export async function apiRequest<T>(
   }
 
   const url = `${getApiBaseUrl()}${path}`;
+  // A stalled connection would otherwise hang the caller forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort);
   let response: Response;
   try {
     response = await fetch(url, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal,
+      signal: controller.signal,
     });
   } catch {
-    throw new ApiError(0, 'Network unavailable');
+    throw new ApiError(0, signal?.aborted ? 'Request cancelled' : 'Network unavailable');
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
   }
 
   if (!response.ok) {

@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ca.cracknews.app"
+      "bundleIdentifier": "ca.cracknews.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -46,7 +49,10 @@
         {
           "enableBackgroundPlayback": true
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-asset",
+      "react-native-google-mobile-ads"
     ],
     "experiments": {
       "typedRoutes": true

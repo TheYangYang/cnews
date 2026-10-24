@@ -23,37 +23,42 @@ export async function setPref(key: string, value: string): Promise<void> {
   }
 }
 
-/** Optional native SQLite handle for feed cache — never throws to callers. */
-export async function tryGetSqlite(): Promise<import('expo-sqlite').SQLiteDatabase | null> {
-  if (Platform.OS === 'web') return null;
+const FEED_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS feed_stories (
+    story_id TEXT PRIMARY KEY NOT NULL,
+    payload TEXT NOT NULL,
+    published_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_feed_stories_published ON feed_stories(published_at);
+`;
+
+let sqlite: Promise<import('expo-sqlite').SQLiteDatabase | null> | null = null;
+
+async function openSqlite(): Promise<import('expo-sqlite').SQLiteDatabase | null> {
+  const SQLite = await import('expo-sqlite');
   try {
-    const SQLite = await import('expo-sqlite');
     const db = await SQLite.openDatabaseAsync('cnews.db');
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS feed_stories (
-        story_id TEXT PRIMARY KEY NOT NULL,
-        payload TEXT NOT NULL,
-        published_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
+    await db.execAsync(FEED_SCHEMA);
     return db;
   } catch {
+    // Corrupt cache file: it only holds cached cards, so start it over.
     try {
-      const SQLite = await import('expo-sqlite');
       await SQLite.deleteDatabaseAsync('cnews.db');
       const db = await SQLite.openDatabaseAsync('cnews.db');
-      await db.execAsync(`
-        CREATE TABLE IF NOT EXISTS feed_stories (
-          story_id TEXT PRIMARY KEY NOT NULL,
-          payload TEXT NOT NULL,
-          published_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        );
-      `);
+      await db.execAsync(FEED_SCHEMA);
       return db;
     } catch {
       return null;
     }
   }
+}
+
+/** Optional native SQLite handle for feed cache — opened once, never throws to callers. */
+export function tryGetSqlite(): Promise<import('expo-sqlite').SQLiteDatabase | null> {
+  if (Platform.OS === 'web') return Promise.resolve(null);
+  if (!sqlite) {
+    sqlite = openSqlite().catch(() => null);
+  }
+  return sqlite;
 }

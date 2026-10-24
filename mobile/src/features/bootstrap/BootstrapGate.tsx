@@ -46,7 +46,7 @@ export function BootstrapGate({ children }: Props) {
 
       const topics = useSettingsStore.getState().selectedTopics;
       const token = useAuthStore.getState().accessToken;
-      void fetchHomeFeed({ topics, limit: 10, token, mode: 'any' })
+      void fetchHomeFeed({ topics, limit: 10, token, mode: 'listen' })
         .then((feed) => upsertFeedStories(feed.items))
         .catch(() => undefined);
     })();

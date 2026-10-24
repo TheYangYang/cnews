@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   NativeScrollEvent,
@@ -16,6 +16,7 @@ import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated'
 
 import * as WebBrowser from 'expo-web-browser';
 import { fetchStorylineDetail, fetchStorylines } from '@/data/api/endpoints';
+import { NativeStorylineAdCard } from '@/features/ads/NativeAdCards';
 import { StorylineAdCard } from '@/features/storylines/StorylineAdCard';
 import { StorylineCard } from '@/features/storylines/StorylineCard';
 import { updatesToCards } from '@/features/storylines/storylineUtils';
@@ -55,10 +56,13 @@ export function StorylinesScreen() {
     hasMore,
     refreshRandom,
     loadMore,
+    error,
   } = useStorylines(filter);
 
   // Build Play queue from currently loaded threads’ updates.
+  const queueTicket = useRef(0);
   const refreshPlayQueue = useCallback(async () => {
+    const ticket = ++queueTicket.current;
     const list = items.length
       ? items
       : (
@@ -72,6 +76,8 @@ export function StorylinesScreen() {
     const details = await Promise.all(
       open.slice(0, 8).map((t) => fetchStorylineDetail(t.threadId, token).catch(() => null)),
     );
+    // A newer rebuild (filter change, more pages) superseded this one.
+    if (ticket !== queueTicket.current) return;
     const stories = details.flatMap((d) => (d ? updatesToCards(d) : []));
     const storyIdToThreadId: Record<string, string> = {};
     for (const d of details) {
@@ -81,16 +87,23 @@ export function StorylinesScreen() {
     setStorylineQueue(stories, { storyIdToThreadId });
   }, [items, filter, token, setStorylineQueue]);
 
+  // Enter/leave only. Must not depend on the list, or every page load would stop Play.
   useFocusEffect(
     useCallback(() => {
       setSurface('storylines');
       // Leaving Home/reader for Storylines always stops wall/reader audio.
       void usePlayerStore.getState().stop();
-      void refreshPlayQueue();
       return () => {
         void usePlayerStore.getState().stop();
       };
-    }, [setSurface, refreshPlayQueue]),
+    }, [setSurface]),
+  );
+
+  // Rebuild the Play queue on focus and whenever the loaded threads change.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshPlayQueue().catch(() => undefined);
+    }, [refreshPlayQueue]),
   );
 
   const onAdPress = useCallback(async (ad: DisplayAd) => {
@@ -148,6 +161,13 @@ export function StorylinesScreen() {
 
       {isLoading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.accent} />
+      ) : items.length === 0 && error ? (
+        <EmptyState
+          title="Can't reach CrackNews"
+          message="Check your connection and try again."
+          actionLabel="Retry"
+          onAction={() => void refreshRandom()}
+        />
       ) : items.length === 0 ? (
         <EmptyState title="Quiet for now" message="Longer-running stories collect here." />
       ) : (
@@ -165,10 +185,18 @@ export function StorylinesScreen() {
           }>
           {listItems.map((entry, i) => (
             <Animated.View
-              key={entry.kind === 'ad' ? `ad:${entry.ad.adId}` : entry.thread.threadId}
+              key={
+                entry.kind === 'native'
+                  ? `native:${entry.slotId}`
+                  : entry.kind === 'ad'
+                    ? `ad:${entry.ad.adId}`
+                    : entry.thread.threadId
+              }
               layout={LinearTransition.duration(motion.duration.fast)}
               entering={FadeInDown.delay(Math.min(i, 8) * 45).duration(motion.duration.base)}>
-              {entry.kind === 'ad' ? (
+              {entry.kind === 'native' ? (
+                <NativeStorylineAdCard slotId={entry.slotId} />
+              ) : entry.kind === 'ad' ? (
                 <StorylineAdCard ad={entry.ad} onPress={() => void onAdPress(entry.ad)} />
               ) : (
                 <StorylineCard

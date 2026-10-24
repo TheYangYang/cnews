@@ -1,4 +1,5 @@
 import { apiRequest } from '@/data/api/client';
+import { MOCKS_ENABLED } from '@/data/api/config';
 import {
   MOCK_COVERAGE,
   MOCK_FEED,
@@ -23,14 +24,16 @@ import type {
 } from '@/data/types/api';
 import { ApiError } from '@/data/api/client';
 
-function useMockFallback<T>(fn: () => Promise<T>, fallback: () => T): Promise<T> {
+function withMockFallback<T>(fn: () => Promise<T>, fallback: () => T): Promise<T> {
   return fn().catch((err: unknown) => {
-    if (err instanceof ApiError && err.status === 0) {
+    if (MOCKS_ENABLED && err instanceof ApiError && err.status === 0) {
       return fallback();
     }
     throw err;
   });
 }
+
+const seg = encodeURIComponent;
 
 export async function fetchHomeFeed(params: {
   topics?: string[];
@@ -47,7 +50,7 @@ export async function fetchHomeFeed(params: {
   if (params.newerThan) qs.set('newerThan', params.newerThan);
   if (params.mode) qs.set('mode', params.mode);
   const query = qs.toString();
-  return useMockFallback(
+  return withMockFallback(
     () =>
       apiRequest<HomeFeedResponse>(`/v1/home/feed${query ? `?${query}` : ''}`, {
         token: params.token,
@@ -64,7 +67,7 @@ export async function fetchDisplayAds(params?: {
   const qs = new URLSearchParams();
   qs.set('slot', params?.slot ?? 'home_wall');
   if (params?.limit) qs.set('limit', String(params.limit));
-  return useMockFallback(
+  return withMockFallback(
     () =>
       apiRequest<DisplayAdsResponse>(`/v1/ads/display?${qs.toString()}`, {
         token: params?.token,
@@ -83,7 +86,7 @@ export async function fetchSearch(params: {
   qs.set('q', params.q);
   qs.set('mode', params.mode ?? 'listen');
   if (params.limit) qs.set('limit', String(params.limit));
-  return useMockFallback(
+  return withMockFallback(
     () =>
       apiRequest<SearchResponse>(`/v1/search?${qs.toString()}`, {
         token: params.token,
@@ -112,8 +115,8 @@ export async function fetchStory(
   storyId: string,
   token?: string | null,
 ): Promise<StoryDetailResponse> {
-  return useMockFallback(
-    () => apiRequest<StoryDetailResponse>(`/v1/stories/${storyId}`, { token }),
+  return withMockFallback(
+    () => apiRequest<StoryDetailResponse>(`/v1/stories/${seg(storyId)}`, { token }),
     () => {
       const story = getMockStoryById(storyId);
       if (!story) throw new ApiError(404, 'Story not found', 'not_found');
@@ -130,8 +133,8 @@ export async function fetchStoryAudioUrl(
   storyId: string,
   token?: string | null,
 ): Promise<AudioUrlResponse> {
-  return useMockFallback(
-    () => apiRequest<AudioUrlResponse>(`/v1/stories/${storyId}/audio-url`, { token }),
+  return withMockFallback(
+    () => apiRequest<AudioUrlResponse>(`/v1/stories/${seg(storyId)}/audio-url`, { token }),
     () => ({
       audioUrl: '',
       expiresAt: new Date(Date.now() + 3600_000).toISOString(),
@@ -143,8 +146,8 @@ export async function fetchCoverage(
   clusterId: string,
   token?: string | null,
 ): Promise<CoverageResponse> {
-  return useMockFallback(
-    () => apiRequest<CoverageResponse>(`/v1/coverage/${clusterId}`, { token }),
+  return withMockFallback(
+    () => apiRequest<CoverageResponse>(`/v1/coverage/${seg(clusterId)}`, { token }),
     () => {
       const cluster = MOCK_COVERAGE[clusterId];
       if (!cluster) throw new ApiError(404, 'Coverage not found', 'not_found');
@@ -166,7 +169,7 @@ export async function fetchStorylines(params: {
   if (params.limit) qs.set('limit', String(params.limit));
   if (params.cursor) qs.set('cursor', params.cursor);
   const query = qs.toString();
-  return useMockFallback(
+  return withMockFallback(
     () =>
       apiRequest<{ items: StorylineSummary[]; nextCursor?: string | null }>(
         `/v1/storylines${query ? `?${query}` : ''}`,
@@ -195,8 +198,8 @@ export async function fetchStorylineDetail(
   threadId: string,
   token?: string | null,
 ): Promise<StorylineDetail> {
-  return useMockFallback(
-    () => apiRequest<StorylineDetail>(`/v1/storylines/${threadId}`, { token }),
+  return withMockFallback(
+    () => apiRequest<StorylineDetail>(`/v1/storylines/${seg(threadId)}`, { token }),
     () => {
       const detail = MOCK_STORYLINE_DETAILS[threadId];
       if (!detail) throw new ApiError(404, 'Storyline not found', 'not_found');
@@ -206,7 +209,7 @@ export async function fetchStorylineDetail(
 }
 
 export async function fetchTopicsMeta(token?: string | null): Promise<TopicsMetaResponse> {
-  return useMockFallback(
+  return withMockFallback(
     () => apiRequest<TopicsMetaResponse>('/v1/meta/topics', { token }),
     () => MOCK_TOPICS,
   );
@@ -219,7 +222,7 @@ export async function postGoogleAuth(idToken: string): Promise<GoogleAuthRespons
       body: { idToken },
     });
   } catch (err) {
-    if (err instanceof ApiError && err.status === 0) {
+    if (MOCKS_ENABLED && err instanceof ApiError && err.status === 0) {
       return {
         accessToken: 'mock-jwt',
         expiresAt: new Date(Date.now() + 86400_000).toISOString(),
@@ -247,7 +250,7 @@ export async function putUserTopics(
       token,
     });
   } catch (err) {
-    if (err instanceof ApiError && err.status === 0) {
+    if (MOCKS_ENABLED && err instanceof ApiError && err.status === 0) {
       return {
         userId: 'mock-user',
         email: 'demo@cnews.ca',

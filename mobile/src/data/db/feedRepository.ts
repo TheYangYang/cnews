@@ -4,6 +4,7 @@ import { tryGetSqlite } from '@/data/db/database';
 import type { StoryCard } from '@/data/types/api';
 
 const MEMORY_KEY = 'cnews.feed.cache.v1';
+const SQLITE_KEEP = 300;
 
 async function writeMemory(stories: StoryCard[]): Promise<void> {
   try {
@@ -42,17 +43,26 @@ export async function upsertFeedStories(stories: StoryCard[]): Promise<void> {
   if (!db) return;
   const now = new Date().toISOString();
   try {
-    for (const story of stories) {
+    await db.withTransactionAsync(async () => {
+      for (const story of stories) {
+        await db.runAsync(
+          `INSERT INTO feed_stories (story_id, payload, published_at, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(story_id) DO UPDATE SET
+             payload = excluded.payload,
+             published_at = excluded.published_at,
+             updated_at = excluded.updated_at`,
+          [story.storyId, JSON.stringify(story), story.publishedAt, now],
+        );
+      }
+      // Keep the newest cards only; the cache is a cold-start placeholder, not an archive.
       await db.runAsync(
-        `INSERT INTO feed_stories (story_id, payload, published_at, updated_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(story_id) DO UPDATE SET
-           payload = excluded.payload,
-           published_at = excluded.published_at,
-           updated_at = excluded.updated_at`,
-        [story.storyId, JSON.stringify(story), story.publishedAt, now],
+        `DELETE FROM feed_stories WHERE story_id NOT IN (
+           SELECT story_id FROM feed_stories ORDER BY published_at DESC LIMIT ?
+         )`,
+        [SQLITE_KEEP],
       );
-    }
+    });
   } catch {
     /* AsyncStorage already holds the cache */
   }

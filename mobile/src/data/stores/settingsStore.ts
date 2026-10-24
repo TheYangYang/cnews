@@ -42,6 +42,9 @@ export const useSettingsStore = create<SettingsState>()(
         await get().setTopics(next.length ? next : DEFAULT_TOPICS);
       },
       hydrateFromSqlite: async () => {
+        // Wait for the persisted state first, or this one-time migration re-runs every
+        // cold start and re-adds topics the user turned off.
+        await waitForPersistedSettings();
         if (get().hydratedFromSqlite) return;
         const topicsRaw = await getPref('topics');
         const authTopics = useAuthStore.getState().user?.topics;
@@ -67,3 +70,17 @@ export const useSettingsStore = create<SettingsState>()(
     },
   ),
 );
+
+function waitForPersistedSettings(): Promise<void> {
+  if (useSettingsStore.persist.hasHydrated()) return Promise.resolve();
+  return new Promise((resolve) => {
+    // Bootstrap waits on this; never hold the splash screen if storage is stuck.
+    const timer = setTimeout(done, 1500);
+    const unsubscribe = useSettingsStore.persist.onFinishHydration(done);
+    function done() {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve();
+    }
+  });
+}

@@ -75,14 +75,15 @@ export function StoryReaderScreen({ storyId }: Props) {
 
   const syncReaderPlayQueue = useCallback(
     (fromIndex: number) => {
-      if (!items.length) {
+      const list = itemsRef.current;
+      if (!list.length) {
         setReaderQueue([]);
         return;
       }
-      const start = Math.max(0, Math.min(fromIndex, items.length - 1));
-      setReaderQueue(items.slice(start).map((s) => s.storyId));
+      const start = Math.max(0, Math.min(fromIndex, list.length - 1));
+      setReaderQueue(list.slice(start).map((s) => s.storyId));
     },
-    [items, setReaderQueue],
+    [setReaderQueue],
   );
 
   useFocusEffect(
@@ -101,25 +102,24 @@ export function StoryReaderScreen({ storyId }: Props) {
     }, [setSurface, syncReaderPlayQueue, clearReaderQueue, storyId]),
   );
 
-  // Jump pager when opening a card from Home.
+  // Jump pager to the opened card. Runs when the card, the page height, or the first
+  // page of items arrives — never on pagination, which must not move the pager or stop Play.
+  const hasItems = items.length > 0;
+  const startIndexRef = useRef(startIndex);
+  startIndexRef.current = startIndex;
   useEffect(() => {
-    if (!items.length) return;
+    if (!hasItems) return;
+    const target = startIndexRef.current;
     setWebOpen(false);
-    setIndex(startIndex);
-    indexRef.current = startIndex;
-    syncReaderPlayQueue(startIndex);
-    const speaking = useFeedUiStore.getState().speakingStoryId;
-    if (speaking && speaking !== storyId) {
-      void usePlayerStore.getState().stop();
-    }
+    setIndex(target);
+    indexRef.current = target;
+    syncReaderPlayQueue(target);
     if (pageH <= 0) return;
     const id = requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: startIndex, animated: false });
+      listRef.current?.scrollToIndex({ index: target, animated: false });
     });
     return () => cancelAnimationFrame(id);
-    // Intentionally not depending on items.length — loadMore must not stop playback.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storyId, startIndex, pageH, syncReaderPlayQueue]);
+  }, [storyId, hasItems, pageH, syncReaderPlayQueue]);
 
   // Keep reader Play order in sync when the feed grows (pagination).
   useEffect(() => {

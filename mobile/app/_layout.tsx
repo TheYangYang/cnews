@@ -1,6 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import {
+  ErrorBoundary as RouterErrorBoundary,
+  Stack,
+  useNavigationContainerRef,
+  type ErrorBoundaryProps,
+} from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -8,9 +13,19 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { BootstrapGate } from '@/features/bootstrap/BootstrapGate';
+import { startAds } from '@/features/ads/nativeAdPool';
+import { Sentry, initMonitoring, navigationIntegration } from '@/shared/monitoring/sentry';
 import { ThemeProvider, useTheme } from '@/shared/theme/ThemeProvider';
 
-export { ErrorBoundary } from 'expo-router';
+initMonitoring();
+
+/** Expo Router's screen error boundary, reporting the crash to Sentry first. */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  useEffect(() => {
+    Sentry.captureException(props.error);
+  }, [props.error]);
+  return <RouterErrorBoundary {...props} />;
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,7 +57,16 @@ function RootNavigation() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
+  const navigationRef = useNavigationContainerRef();
+  useEffect(() => {
+    if (navigationRef) navigationIntegration.registerNavigationContainer(navigationRef);
+  }, [navigationRef]);
+
+  useEffect(() => {
+    void startAds();
+  }, []);
+
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -67,3 +91,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default Sentry.wrap(RootLayout);

@@ -48,7 +48,9 @@ export interface DisplayAdsResponse {
 
 export type WallItem =
   | { kind: 'story'; story: StoryCard }
-  | { kind: 'ad'; ad: DisplayAd };
+  | { kind: 'ad'; ad: DisplayAd }
+  /** A Google AdMob native ad already loaded into the ad pool (features/ads). */
+  | { kind: 'native'; slotId: string };
 
 export interface StoryDetailResponse {
   story: StoryCard;

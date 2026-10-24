@@ -46,7 +46,9 @@ export function HomeScreen() {
     loadMore,
     hasMore,
     loadingMore,
+    error,
   } = useFeed();
+  const offline = !!error;
   const scrollRef = useRef<ScrollView>(null);
   const [updatedToast, setUpdatedToast] = useState<string | null>(null);
 
@@ -99,6 +101,13 @@ export function HomeScreen() {
         <Animated.View entering={FadeIn.duration(motion.duration.fast)} style={{ flex: 1 }}>
           <MasonrySkeleton />
         </Animated.View>
+      ) : items.length === 0 && offline ? (
+        <EmptyState
+          title="Can't reach CrackNews"
+          message="Check your connection and try again."
+          actionLabel="Retry"
+          onAction={() => void refreshRandom()}
+        />
       ) : items.length === 0 ? (
         <EmptyState
           title="Nothing to show"
@@ -123,6 +132,17 @@ export function HomeScreen() {
           }
         />
       )}
+      {offline && items.length > 0 && !updatedToast ? (
+        <Animated.View
+          entering={FadeInDown.duration(motion.duration.fast)}
+          exiting={FadeOutUp.duration(motion.duration.fast)}
+          pointerEvents="none"
+          style={[styles.updated, { top: insets.top + 8, backgroundColor: colors.toastBg }]}>
+          <Text style={[styles.updatedText, { color: colors.toastText }]}>
+            Offline · showing saved stories
+          </Text>
+        </Animated.View>
+      ) : null}
       {updatedToast ? (
         <Animated.View
           entering={FadeInDown.duration(motion.duration.fast)}

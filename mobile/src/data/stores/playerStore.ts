@@ -1,8 +1,4 @@
-import {
-  createAudioPlaylist,
-  setAudioModeAsync,
-  type AudioPlaylist,
-} from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioStatus } from 'expo-audio';
 import { create } from 'zustand';
 
 import { fetchStoryAudioUrl } from '@/data/api/endpoints';
@@ -38,13 +34,32 @@ type PlayerState = {
   clearToast: () => void;
 };
 
-let playlist: AudioPlaylist | null = null;
-let subs: { remove: () => void }[] = [];
-let advanceTimer: ReturnType<typeof setTimeout> | null = null;
-let activeStoryId: string | null = null;
+/**
+ * One AudioPlayer, reused for every brief; the queue lives in JS.
+ * (AudioPlaylist has no lock-screen API, and without lock-screen controls Android
+ * stops background audio after ~3 minutes.)
+ */
+let player: AudioPlayer | null = null;
+let lockScreenActive = false;
 let audioModeReady = false;
-let readerOnFinished: (() => void) | null = null;
+/** Bumped by every start/stop so late async work (URL fetches) can tell it is stale. */
+let session = 0;
+/** Bumped per track so a finish event and the fallback timer can't both advance. */
+let track = 0;
+let playedThisSession = false;
 let pausedByUser = false;
+let retriedFreshUrl = false;
+let advanceTimer: ReturnType<typeof setTimeout> | null = null;
+let loadWatchdog: ReturnType<typeof setTimeout> | null = null;
+let readerOnFinished: (() => void) | null = null;
+
+let trackStartedAt = 0;
+
+const LOAD_TIMEOUT_MS = 10_000;
+const TRACK_SETTLE_MS = 1_000;
+/** Signed audio URLs live ~15 min on the API; refetch well before that. */
+const URL_MAX_AGE_MS = 10 * 60_000;
+const resolvedAt = new Map<string, number>();
 
 async function ensureBackgroundAudioMode() {
   if (audioModeReady) return;
@@ -56,50 +71,41 @@ async function ensureBackgroundAudioMode() {
   audioModeReady = true;
 }
 
-function clearAdvanceTimer() {
-  if (advanceTimer) {
-    clearTimeout(advanceTimer);
-    advanceTimer = null;
-  }
+function clearTimers() {
+  if (advanceTimer) clearTimeout(advanceTimer);
+  if (loadWatchdog) clearTimeout(loadWatchdog);
+  advanceTimer = null;
+  loadWatchdog = null;
 }
 
-function unloadPlaylist() {
-  clearAdvanceTimer();
-  for (const s of subs) {
-    try {
-      s.remove();
-    } catch {
-      /* ignore */
-    }
+function getPlayer(): AudioPlayer {
+  if (!player) {
+    player = createAudioPlayer(null, { updateInterval: 400 });
+    player.addListener('playbackStatusUpdate', onStatus);
   }
-  subs = [];
-  readerOnFinished = null;
-  activeStoryId = null;
-  pausedByUser = false;
-  if (playlist) {
-    try {
-      playlist.pause();
-    } catch {
-      /* ignore */
-    }
-    try {
-      playlist.destroy();
-    } catch {
-      /* ignore */
-    }
-    playlist = null;
-  }
+  return player;
 }
 
-async function resolveAudioUrl(storyId: string, existing?: string): Promise<string | null> {
-  if (existing) return rewriteMediaUrl(existing) ?? null;
+async function fetchFreshUrl(storyId: string): Promise<string | null> {
   const token = useAuthStore.getState().accessToken;
   try {
     const res = await fetchStoryAudioUrl(storyId, token);
-    return rewriteMediaUrl(res.audioUrl) ?? null;
+    const url = rewriteMediaUrl(res.audioUrl) ?? null;
+    if (url) resolvedAt.set(storyId, Date.now());
+    return url;
   } catch {
     return null;
   }
+}
+
+async function resolveAudioUrl(item: QueueItem): Promise<string | null> {
+  const fetchedAt = resolvedAt.get(item.storyId);
+  const fresh = fetchedAt !== undefined && Date.now() - fetchedAt < URL_MAX_AGE_MS;
+  // A URL that came with the card (no fetch time) is tried once; a load timeout refetches.
+  if (item.audioUrl && (fresh || fetchedAt === undefined)) {
+    return rewriteMediaUrl(item.audioUrl) ?? null;
+  }
+  return fetchFreshUrl(item.storyId);
 }
 
 function toQueueItems(stories: StoryCard[], orderedIds: string[]): QueueItem[] {
@@ -127,94 +133,167 @@ function toQueueItems(stories: StoryCard[], orderedIds: string[]): QueueItem[] {
   return queue;
 }
 
-async function withUrls(items: QueueItem[]): Promise<QueueItem[]> {
-  const resolved = await Promise.all(
-    items.map(async (item) => {
-      const audioUrl = (await resolveAudioUrl(item.storyId, item.audioUrl)) ?? undefined;
-      return { ...item, audioUrl };
-    }),
-  );
-  return resolved.filter((item) => !!item.audioUrl);
+function showOnLockScreen(item: QueueItem) {
+  const p = getPlayer();
+  const metadata = {
+    title: item.title,
+    artist: item.outlet ?? 'CrackNews',
+    albumTitle: 'CrackNews',
+    artworkUrl: rewriteMediaUrl(item.imageUrl) ?? undefined,
+  };
+  try {
+    if (lockScreenActive) {
+      p.updateLockScreenMetadata(metadata);
+    } else {
+      p.setActiveForLockScreen(true, metadata, { showSeekForward: false, showSeekBackward: false });
+      lockScreenActive = true;
+    }
+  } catch {
+    /* lock screen is best-effort (e.g. Expo Go) */
+  }
 }
 
-function applyTrack(index: number, queue: QueueItem[], set: Set) {
-  const item = queue[index];
-  if (!item) return;
-  activeStoryId = item.storyId;
-  useFeedUiStore.getState().setSpeakingStoryId(item.storyId);
-  set({ queueIndex: index, isPlaying: true });
-  armAdvanceTimer(index, item.audioDurationMs);
-}
-
-function armAdvanceTimer(index: number, durationMs?: number) {
-  clearAdvanceTimer();
+function armAdvanceTimer(durationMs?: number) {
+  if (advanceTimer) clearTimeout(advanceTimer);
+  advanceTimer = null;
   if (!durationMs || durationMs < 400) return;
-  const elapsedMs = playlist ? Math.max(0, playlist.currentTime * 1000) : 0;
+  // Fallback in case a platform drops the finish event.
+  const elapsedMs = player ? Math.max(0, player.currentTime * 1000) : 0;
   const wait = Math.max(400, durationMs - elapsedMs + 400);
+  const t = track;
   advanceTimer = setTimeout(() => {
-    if (pausedByUser || !playlist) return;
-    if (playlist.currentIndex !== index) return;
-    if (index >= playlist.trackCount - 1) {
-      void usePlayerStore.getState().stop().then(() => readerOnFinished?.());
-      return;
-    }
-    try {
-      playlist.next();
-    } catch {
-      /* trackChanged listener updates the highlight */
-    }
+    if (pausedByUser || t !== track) return;
+    void advance(t);
   }, wait);
 }
 
-type Get = () => PlayerState;
-type Set = (
-  partial: Partial<PlayerState> | ((state: PlayerState) => Partial<PlayerState>),
-) => void;
+function prefetchNext(index: number, s: number) {
+  const next = usePlayerStore.getState().queue[index + 1];
+  if (!next || resolvedAt.has(next.storyId) || next.audioUrl) return;
+  void fetchFreshUrl(next.storyId).then((url) => {
+    if (!url || s !== session) return;
+    usePlayerStore.setState((state) => ({
+      queue: state.queue.map((q) => (q.storyId === next.storyId ? { ...q, audioUrl: url } : q)),
+    }));
+  });
+}
 
-async function playQueue(
-  items: QueueItem[],
-  context: Exclude<PlayerContext, null>,
-  set: Set,
-  get: Get,
-) {
-  unloadPlaylist();
-  await ensureBackgroundAudioMode();
-
-  const queue = await withUrls(items);
-  if (!queue.length) {
-    set({ toastMessage: 'No spoken briefs ready yet', isPlaying: false, queue: [], context: null });
+async function playIndex(index: number, s: number): Promise<void> {
+  const state = usePlayerStore.getState();
+  const item = state.queue[index];
+  if (!item) {
+    await finish(s);
+    return;
+  }
+  const url = await resolveAudioUrl(item);
+  if (s !== session) return;
+  if (!url) {
+    await playIndex(index + 1, s);
     return;
   }
 
-  playlist = createAudioPlaylist({
-    sources: queue.map((item) => item.audioUrl as string),
-    updateInterval: 400,
-    loop: 'none',
-  });
+  const t = ++track;
+  retriedFreshUrl = false;
+  clearTimers();
+  pausedByUser = false;
+  const p = getPlayer();
+  trackStartedAt = Date.now();
+  p.replace({ uri: url });
+  p.play();
+  playedThisSession = true;
+  useFeedUiStore.getState().setSpeakingStoryId(item.storyId);
+  usePlayerStore.setState({ queueIndex: index, isPlaying: true });
+  showOnLockScreen(item);
+  armAdvanceTimer(item.audioDurationMs);
+  armLoadWatchdog(index, s, t, item);
+  prefetchNext(index, s);
+}
 
-  set({ queue, queueIndex: 0, context, isPlaying: true });
-  applyTrack(0, queue, set);
+function armLoadWatchdog(index: number, s: number, t: number, item: QueueItem) {
+  loadWatchdog = setTimeout(() => {
+    if (s !== session || t !== track || player?.isLoaded) return;
+    // A stale signed URL is the usual cause: refetch once, then skip the brief.
+    if (!retriedFreshUrl) {
+      retriedFreshUrl = true;
+      void fetchFreshUrl(item.storyId).then((url) => {
+        if (!url || s !== session || t !== track) {
+          void advance(t);
+          return;
+        }
+        getPlayer().replace({ uri: url });
+        getPlayer().play();
+        loadWatchdog = setTimeout(() => {
+          if (s === session && t === track && !player?.isLoaded) void advance(t);
+        }, LOAD_TIMEOUT_MS);
+      });
+      return;
+    }
+    void advance(t);
+  }, LOAD_TIMEOUT_MS);
+}
 
-  subs.push(
-    playlist.addListener('trackChanged', ({ currentIndex }) => {
-      if (get().context !== context) return;
-      applyTrack(currentIndex, get().queue, set);
-    }),
-  );
-  subs.push(
-    playlist.addListener('playlistStatusUpdate', (status) => {
-      if (get().context !== context) return;
-      if (typeof status.currentIndex === 'number' && status.currentIndex !== get().queueIndex) {
-        applyTrack(status.currentIndex, get().queue, set);
-      }
-      if (status.didJustFinish) {
-        clearAdvanceTimer();
-        void get().stop().then(() => readerOnFinished?.());
-      }
-    }),
-  );
+async function advance(t: number) {
+  if (t !== track) return;
+  track++; // claim this transition
+  const { queueIndex } = usePlayerStore.getState();
+  await playIndex(queueIndex + 1, session);
+}
 
-  playlist.play();
+async function finish(s: number) {
+  if (s !== session) return;
+  const empty = !playedThisSession;
+  const onFinished = readerOnFinished;
+  await usePlayerStore.getState().stop();
+  if (empty) {
+    usePlayerStore.setState({ toastMessage: 'No spoken briefs ready yet' });
+  } else {
+    onFinished?.();
+  }
+}
+
+function onStatus(status: AudioStatus) {
+  // Events from the brief we just replaced can land after replace(); ignore them.
+  if (Date.now() - trackStartedAt < TRACK_SETTLE_MS) return;
+  if (status.didJustFinish) {
+    void advance(track);
+    return;
+  }
+  if (!status.isLoaded) return;
+  if (loadWatchdog) {
+    clearTimeout(loadWatchdog);
+    loadWatchdog = null;
+  }
+  // Keep the Play button in sync with lock-screen / headset play-pause.
+  const state = usePlayerStore.getState();
+  if (state.queue.length && status.playing !== state.isPlaying && !status.isBuffering) {
+    pausedByUser = !status.playing;
+    usePlayerStore.setState({ isPlaying: status.playing });
+    if (status.playing) armAdvanceTimer(state.queue[state.queueIndex]?.audioDurationMs);
+    else if (advanceTimer) clearTimeout(advanceTimer);
+  }
+}
+
+async function playQueue(items: QueueItem[], context: Exclude<PlayerContext, null>) {
+  const s = ++session;
+  clearTimers();
+  playedThisSession = false;
+  player?.pause();
+  await ensureBackgroundAudioMode();
+  if (s !== session) return;
+
+  if (!items.length) {
+    useFeedUiStore.getState().setSpeakingStoryId(null);
+    usePlayerStore.setState({
+      toastMessage: 'No spoken briefs ready yet',
+      isPlaying: false,
+      queue: [],
+      queueIndex: 0,
+      context: null,
+    });
+    return;
+  }
+  usePlayerStore.setState({ queue: items, queueIndex: 0, context, isPlaying: true });
+  await playIndex(0, s);
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -227,27 +306,40 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   clearToast: () => set({ toastMessage: null }),
 
   stop: async () => {
-    unloadPlaylist();
+    session++;
+    track++;
+    clearTimers();
+    readerOnFinished = null;
+    pausedByUser = false;
+    if (player) {
+      try {
+        player.pause();
+        if (lockScreenActive) player.clearLockScreenControls();
+      } catch {
+        /* ignore */
+      }
+      lockScreenActive = false;
+    }
     useFeedUiStore.getState().setSpeakingStoryId(null);
     set({ isPlaying: false, queue: [], queueIndex: 0, context: null });
   },
 
   togglePause: async () => {
-    if (!playlist) {
+    const { queue, queueIndex, isPlaying } = get();
+    if (!player || !queue.length) {
       set({ isPlaying: false });
       return;
     }
-    if (playlist.playing) {
+    if (isPlaying) {
       pausedByUser = true;
-      clearAdvanceTimer();
-      playlist.pause();
+      if (advanceTimer) clearTimeout(advanceTimer);
+      player.pause();
       set({ isPlaying: false });
     } else {
       pausedByUser = false;
-      playlist.play();
+      player.play();
       set({ isPlaying: true });
-      const { queueIndex, queue } = get();
-      armAdvanceTimer(queueIndex, queue[queueIndex]?.audioDurationMs);
+      armAdvanceTimer(queue[queueIndex]?.audioDurationMs);
     }
   },
 
@@ -256,72 +348,34 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       set({ toastMessage: 'No spoken brief for this story yet' });
       return;
     }
-    if (playlist && activeStoryId === story.storyId) {
+    const { queue, queueIndex } = get();
+    if (queue[queueIndex]?.storyId === story.storyId && queue.length) {
       set({ context: 'reader' });
       readerOnFinished = opts?.onFinished ?? null;
       return;
     }
     readerOnFinished = opts?.onFinished ?? null;
-    await playQueue(
-      [
-        {
-          storyId: story.storyId,
-          title: story.title,
-          outlet: story.outlet,
-          imageUrl: story.imageUrl,
-          audioUrl: story.audioUrl,
-          audioDurationMs: story.audioDurationMs,
-          audioStatus: story.audioStatus,
-        },
-      ],
-      'reader',
-      set,
-      get,
-    );
+    await playQueue(toQueueItems([story], [story.storyId]), 'reader');
   },
 
   startWallQueue: async (stories, orderedIds) => {
     readerOnFinished = null;
-    await playQueue(toQueueItems(stories, orderedIds), 'wall', set, get);
+    await playQueue(toQueueItems(stories, orderedIds), 'wall');
   },
 
   startStorylineQueue: async (stories, orderedIds) => {
     readerOnFinished = null;
-    await playQueue(toQueueItems(stories, orderedIds), 'storylines', set, get);
+    await playQueue(toQueueItems(stories, orderedIds), 'storylines');
   },
 
+  /** Pull-to-refresh while listening: keep the current brief, rebind what follows. */
   rebindWallQueueTail: (stories, orderedIds) => {
     const state = get();
-    if (state.context !== 'wall' || !state.queue.length || !playlist) return;
-
-    const speakingId =
-      useFeedUiStore.getState().speakingStoryId ??
-      state.queue[state.queueIndex]?.storyId ??
-      activeStoryId;
-    if (!speakingId) return;
-
-    const current =
-      state.queue.find((q) => q.storyId === speakingId) ?? state.queue[state.queueIndex];
+    if (state.context !== 'wall' || !state.queue.length) return;
+    const current = state.queue[state.queueIndex];
     if (!current) return;
-
     const rest = toQueueItems(stories, orderedIds).filter((s) => s.storyId !== current.storyId);
-    const next = [current, ...rest];
-    set({ queue: next, queueIndex: 0 });
-
-    const currentIndex = playlist.currentIndex;
-    void (async () => {
-      if (!playlist) return;
-      while (playlist.trackCount > currentIndex + 1) {
-        playlist.remove(playlist.trackCount - 1);
-      }
-      const ready = await withUrls(rest);
-      for (const item of ready) {
-        if (item.audioUrl) playlist.add({ uri: item.audioUrl });
-      }
-      set({
-        queue: [current, ...ready],
-        queueIndex: 0,
-      });
-    })();
+    set({ queue: [current, ...rest], queueIndex: 0 });
+    prefetchNext(0, session);
   },
 }));

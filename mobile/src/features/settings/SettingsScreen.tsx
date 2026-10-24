@@ -2,6 +2,9 @@ import { useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import {
+  Alert,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,11 +22,14 @@ import { fetchTopicsMeta } from '@/data/api/endpoints';
 import { useAuthStore } from '@/data/stores/authStore';
 import { usePlayerStore } from '@/data/stores/playerStore';
 import { useSettingsStore } from '@/data/stores/settingsStore';
-import { SUPPORT_LINKS } from '@/shared/config/support';
+import { SUPPORT_LINKS, reportContentMailto } from '@/shared/config/support';
 import { Screen } from '@/shared/components/Screen';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 import { motion } from '@/shared/theme/motion';
 import { spacing } from '@/shared/theme/spacing';
+
+// App Store review treats an external tip link as bypassing in-app purchase; Android/web keep it.
+const SHOW_SUPPORT = Platform.OS !== 'ios';
 
 export function SettingsScreen() {
   const { colors, isDark } = useTheme();
@@ -59,25 +65,27 @@ export function SettingsScreen() {
           </Text>
         </Animated.View>
 
-        <Animated.View
-          entering={FadeInDown.delay(60).duration(motion.duration.base)}
-          style={[
-            styles.support,
-            { backgroundColor: colors.accentSoft, borderColor: colors.border },
-          ]}>
-          <Text style={[styles.supportTitle, { color: colors.ink }]}>Keep CrackNews independent</Text>
-          <Text style={[styles.supportBody, { color: colors.textSecondary }]}>
-            Briefs stay free. A coffee helps cover ingest and speech.
-          </Text>
-          <Pressable
-            onPress={() => void WebBrowser.openBrowserAsync(SUPPORT_LINKS.buyMeACoffee)}
-            style={[styles.supportBtn, { backgroundColor: colors.accentBright }]}
-            accessibilityRole="link"
-            accessibilityLabel="Buy us a coffee">
-            <Ionicons name="cafe" size={16} color={colors.onAccent} />
-            <Text style={[styles.supportBtnText, { color: colors.onAccent }]}>Buy us a coffee</Text>
-          </Pressable>
-        </Animated.View>
+        {SHOW_SUPPORT ? (
+          <Animated.View
+            entering={FadeInDown.delay(60).duration(motion.duration.base)}
+            style={[
+              styles.support,
+              { backgroundColor: colors.accentSoft, borderColor: colors.border },
+            ]}>
+            <Text style={[styles.supportTitle, { color: colors.ink }]}>Keep CrackNews independent</Text>
+            <Text style={[styles.supportBody, { color: colors.textSecondary }]}>
+              Briefs stay free. A coffee helps cover ingest and speech.
+            </Text>
+            <Pressable
+              onPress={() => void WebBrowser.openBrowserAsync(SUPPORT_LINKS.buyMeACoffee)}
+              style={[styles.supportBtn, { backgroundColor: colors.accentBright }]}
+              accessibilityRole="link"
+              accessibilityLabel="Buy us a coffee">
+              <Ionicons name="cafe" size={16} color={colors.onAccent} />
+              <Text style={[styles.supportBtnText, { color: colors.onAccent }]}>Buy us a coffee</Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         <Text style={[styles.section, { color: colors.textMuted }]}>Topics</Text>
         <Animated.View
@@ -102,9 +110,43 @@ export function SettingsScreen() {
             })
           )}
         </Animated.View>
+
+        <Text style={[styles.section, { color: colors.textMuted }]}>Content</Text>
+        <Animated.View
+          entering={FadeInDown.delay(180).duration(motion.duration.base)}
+          style={[styles.card, card]}>
+          <Pressable
+            onPress={openReport}
+            style={styles.linkRow}
+            accessibilityRole="link"
+            accessibilityLabel="Report content or request removal">
+            <Ionicons name="flag-outline" size={18} color={colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.topicLabel, { color: colors.text }]}>Report content</Text>
+              <Text style={[styles.linkHint, { color: colors.textMuted }]}>
+                Wrong brief, or a publisher asking for removal
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </Pressable>
+          <Text style={[styles.linkHint, { color: colors.textMuted }]}>
+            Briefs are written by AI from each outlet&apos;s published story. Tap Original on any
+            story to read the source.
+          </Text>
+        </Animated.View>
       </ScrollView>
     </Screen>
   );
+}
+
+async function openReport() {
+  const url = reportContentMailto();
+  try {
+    await Linking.openURL(url);
+  } catch {
+    // No mail app configured: show the address so it can be copied.
+    Alert.alert('Report content', `Email us at ${SUPPORT_LINKS.contactEmail}`);
+  }
 }
 
 const styles = StyleSheet.create({
@@ -141,6 +183,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   topicLabel: { fontSize: 16, fontWeight: '500' },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 4 },
+  linkHint: { fontSize: 13, lineHeight: 18, marginTop: 2 },
   support: {
     borderRadius: 16,
     padding: spacing.lg,
